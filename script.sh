@@ -47,6 +47,8 @@ for type_data in "single_cell" ; do #"bulk"
 		                                                    
 		                                            bsub -P gpu -gpu - -M 20G -e e.log -o o.log -J drug "python /hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/py_scripts/drug_sensitivity.py $type_data $network_info $lr $size_batch $n_epoch $perc_train $perc_val $dropout $gam $step $seed $epoch_reset $type_split $to_test $data_from $model"
 		                                            echo "output_${model}_${network_info}_${lr}_${size_batch}_${n_epoch}_${perc_train}_${perc_val}_${dropout}_${gam}_${step}_${seed}_${epoch_reset}_${type_split}_${to_test}.txt" >> "/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/list_original_parameters_${type_data}_${data_from}.txt"
+                                                done
+                                            done
                                         done                                    
                                     done
                                 done
