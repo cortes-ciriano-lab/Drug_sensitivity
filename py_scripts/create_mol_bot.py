@@ -126,7 +126,7 @@ def create_prism_bottleneck_only_valids(times):
     if True in np.isnan(np.array(mols)):
         print('there are nan in the dataset!! \n ')
         sys.exit()
-    mol_predictions = molecules.run_only_valids(mol_model, mols, times)
+    mol_predictions = molecules.run_only_valids(mol_model, mols, times, mol_indexes)
     
     free_memory = [mol_model, mols]
     for item in free_memory:
@@ -142,13 +142,9 @@ def create_prism_bottleneck_only_valids(times):
     del mol_outputs
     gc.collect()
     
-    # mol_bottlenecks = [x for x in mol_predictions[1] if not isinstance(x, float)]
     mol_bottlenecks = pd.DataFrame(mol_predictions[1])
-    # new_mol_indexes = []
-    # for i in range(len(mol_predictions[1]:
-    #     new_mol_indexes.append(mol_indexes[i])
     mol_bottlenecks.index = mol_indexes
-    mol_bottlenecks.dropna(inplace=True)
+    mol_bottlenecks = mol_bottlenecks.loc[mol_bottlenecks.indes.isin(mol_predictions[2])]
     list_indexes = list(mol_bottlenecks.index)
     
     print('PRISM BOTTLENECK \n', mol_bottlenecks.shape)

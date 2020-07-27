@@ -180,7 +180,7 @@ class Molecular():
         return predictions_complete, bottleneck_complete, invalid_id
     
     # --------------------------------------------------
-    def run_only_valids(self, model_trained, dataset, times):
+    def run_only_valids(self, model_trained, dataset, times, list_indexes):
         dataset_torch = torch.tensor(dataset).type('torch.FloatTensor')
         data_loader = torch.utils.data.DataLoader(dataset_torch, batch_size=1, shuffle=False)
         
@@ -194,7 +194,8 @@ class Molecular():
         model_trained.eval()
         with torch.no_grad():
             number_valid = 0
-            for data_batch in data_loader:
+            valid_id = []
+            for i, data_batch in enumerate(data_loader):
                 data_batch = data_batch.to(self.device)
                 valid = False
                 z_mu, z_var = model_trained.encoder(data_batch)
@@ -214,6 +215,7 @@ class Molecular():
                             valid = True
                             with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/molecular/run_{}/Results_valid.txt'.format(times), 'a') as f:
                                 lines = ['Smile: {}'.format(self.ohf.back_to_smile(list(data_batch))),
+                                         'Index: {}'.format(list_indexes[i]),
                                          'Found valid smile after {} iterations'.format(j+1),
                                          '\n']
                                 f.write('\n'.join(lines))
@@ -226,23 +228,22 @@ class Molecular():
                 
                 self.seed = correct_seed
                 
+                current_loss = self.__loss_function(data_batch, data_predictions, z_mu, z_var)
+                total_loss += current_loss[0].item()
+                reconstruction_loss += current_loss[1].item()
+                kl_loss += current_loss[2].item()
+                predictions_complete.extend(data_predictions.cpu().numpy())
+                bottleneck_complete.extend(x_sample.cpu().numpy())
                 if valid:
-                    current_loss = self.__loss_function(data_batch, data_predictions, z_mu, z_var)
-                    total_loss += current_loss[0].item()
-                    reconstruction_loss += current_loss[1].item()
-                    kl_loss += current_loss[2].item()
-                    predictions_complete.extend(data_predictions.cpu().numpy())
-                    bottleneck_complete.extend(x_sample.cpu().numpy())
+                    valid_id.append(list_indexes[i])
                 else:
-                    predictions_complete.extend([float('NaN')])
-                    bottleneck_complete.extend([float('NaN')])
-                    
                     with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/molecular/run_{}/Results_not_valid.txt'.format(times), 'a') as f:
                         lines = ['Smile: {}'.format(self.ohf.back_to_smile(list(data_batch))),
+                                 'Index: {}'.format(list_indexes[i]),
                                  '\n']
                         f.write('\n'.join(lines))
                 
-                
+        print(number_valid)
         total_loss = total_loss / len(data_loader)
         reconstruction_loss = reconstruction_loss / len(data_loader)
         kl_loss = kl_loss / len(data_loader)
@@ -259,7 +260,7 @@ class Molecular():
                 '\n']
         create_report(self.filename_report, lines)
         
-        return predictions_complete, bottleneck_complete
+        return predictions_complete, bottleneck_complete, valid_id
     
     # --------------------------------------------------
     
