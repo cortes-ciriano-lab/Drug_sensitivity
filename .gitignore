@@ -1,0 +1,11 @@
+data/
+do_not_delete_old_data/
+e.log
+just_in_case_py/
+list_original_parameters_single_cell_pancancer.txt
+o.log
+results/
+py_scripts/__pycache__/
+trained_models/
+.DS_Store
+invalid_smiles.txt
