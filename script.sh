@@ -2,7 +2,7 @@
 
 #NNet
 for type_data in "single_cell" ; do #"bulk"
-    for layers in "64_32" ; do # 
+    for layers in "64_32_16" ; do # 
         for lr in "0.01" ; do
             for size_batch in "64" ; do #"100"
                 for n_epoch in "500" ; do
