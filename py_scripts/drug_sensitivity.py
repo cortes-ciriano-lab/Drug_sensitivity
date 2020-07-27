@@ -48,19 +48,6 @@ def make_correlation_plot(real_data, predicted_data, indexes, type_data):
     plt.ylabel('Predicted_data')
     plt.savefig('plots/Scatter_real_vs_predicted_values_{}.png'.format(type_data))
 
-# --------------------------------------------------
-
-dict_optimisers = {'adagrad':optim.Adagrad(model.parameters(), lr=self.learning_rate),
-                   'adam':optim.Adam(model.parameters(), lr=self.learning_rate),
-                   'adamw':optim.AdamW(model.parameters(), lr=self.learning_rate),
-                   'sparseadam':optim.SparseAdam(model.parameters(), lr=self.learning_rate),
-                   'adamax':optim.Adamax(model.parameters(), lr=self.learning_rate),
-                   'asgd':optim.ASGD(model.parameters(), lr=self.learning_rate),
-                   'lbfgs':optim.LBFGS(model.parameters(), lr=self.learning_rate),
-                   'rmsprop':optim.RMSprop(model.parameters(), lr=self.learning_rate),
-                   'rprop':optim.Rprop(model.parameters(), lr=self.learning_rate),
-                   'sgd':optim.SGD(model.parameters(), lr=self.learning_rate)}
-
 # -------------------------------------------------- DRUG SENSITIVITY --------------------------------------------------
 
 class Drug_sensitivity_single_cell:
@@ -309,6 +296,18 @@ class Drug_sensitivity_single_cell:
     # --------------------------------------------------
 
     def __train_validation_nnet(self, model, train_set, validation_set):
+        
+        dict_optimisers = {'adagrad':optim.Adagrad(model.parameters(), lr=self.learning_rate),
+                   'adam':optim.Adam(model.parameters(), lr=self.learning_rate),
+                   'adamw':optim.AdamW(model.parameters(), lr=self.learning_rate),
+                   'sparseadam':optim.SparseAdam(model.parameters(), lr=self.learning_rate),
+                   'adamax':optim.Adamax(model.parameters(), lr=self.learning_rate),
+                   'asgd':optim.ASGD(model.parameters(), lr=self.learning_rate),
+                   'lbfgs':optim.LBFGS(model.parameters(), lr=self.learning_rate),
+                   'rmsprop':optim.RMSprop(model.parameters(), lr=self.learning_rate),
+                   'rprop':optim.Rprop(model.parameters(), lr=self.learning_rate),
+                   'sgd':optim.SGD(model.parameters(), lr=self.learning_rate)}
+        
         train_loader = torch.utils.data.DataLoader(train_set, batch_size=self.size_batch, shuffle=False)
         validation_loader = torch.utils.data.DataLoader(validation_set, batch_size=self.size_batch, shuffle=False)
         
