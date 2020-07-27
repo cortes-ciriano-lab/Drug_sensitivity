@@ -144,7 +144,7 @@ def create_prism_bottleneck_only_valids(times):
     
     mol_bottlenecks = pd.DataFrame(mol_predictions[1])
     mol_bottlenecks.index = mol_indexes
-    mol_bottlenecks = mol_bottlenecks.loc[mol_bottlenecks.indes.isin(mol_predictions[2])]
+    mol_bottlenecks = mol_bottlenecks.loc[mol_bottlenecks.index.isin(mol_predictions[2])]
     list_indexes = list(mol_bottlenecks.index)
     
     print('PRISM BOTTLENECK \n', mol_bottlenecks.shape)
