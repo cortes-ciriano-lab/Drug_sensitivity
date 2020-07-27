@@ -2,7 +2,7 @@
 
 #NNet
 for type_data in "single_cell" ; do #"bulk"
-    for layers in "64_32_16" ; do # 
+    for layers in "150_100_50" ; do # 
     	for af in "elu" "hardshrink" "hardsigmoid" "hardtanh" "hardswish" "leakyrelu" "logsigmoid" "multiheadattention" "prelu" "relu" "relu6" "rrelu" "selu" "celu" "gelu" "sigmoid" "silu" "softplus" "softshrink" "softsign" "tanh" "tanhshrink" "threshold" ; do
         	for op in "adagrad" "adam" "adamw" "sparseadam" "adamax" "asgd" "lbfgs" "rmsprop" "rprop" "sgd" ; do
         		network_info="${layers}_${af}_${op}"

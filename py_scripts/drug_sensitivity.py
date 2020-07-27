@@ -112,6 +112,8 @@ class Drug_sensitivity_single_cell:
             for i in range(len(network_info)):
                 if i == 0:
                     layers[str(i+1)] = [network_info[i]]
+                elif i == len(network_info) - 1:
+                    layers[str(i+2)] = [network_info[i], 1]
                 else:
                     layers[str(i + 1)] = [network_info[i-1], network_info[i]]
             self.layers_info = layers
