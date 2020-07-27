@@ -41,24 +41,25 @@ def make_correlation_plot(real_data, predicted_data, indexes, type_data):
     data = pd.DataFrame.from_dict(d)
     data.index = indexes
     
-    # matrix_distance = pd.DataFrame(np.zeros((len(real_data), len(predicted_data))), columns=indexes).set_index(indexes)
-    # for i in range(len(real_data)):
-    #     for j in range(len(predicted_data)):
-    #         matrix_distance.iloc[i, j] = distance.euclidean(real_data[i], predicted_data[j])
-    
-    # data = pd.DataFrame([real_data, predicted_data])
-    
-    # plt.figure(figsize=(15, 15))
-    # plt.title('Real values vs Predicted values - {}'.format(type_data), fontsize=14, fontweight='bold')
-    # heatmap = sns.heatmap(matrix_distance)
-    # plt.savefig('plots/Heatmap_real_vs_predicted_values_{}.png'.format(type_data))
-    
     plt.figure(figsize=(15, 15))
     data.plot(x='Real_data', y='Predicted_data', style=['o'])
     plt.title('Real values vs Predicted values - {}'.format(type_data), fontsize=14, fontweight='bold')
     plt.xlabel('Real_data')
     plt.ylabel('Predicted_data')
     plt.savefig('plots/Scatter_real_vs_predicted_values_{}.png'.format(type_data))
+
+# --------------------------------------------------
+
+dict_optimisers = {'adagrad':optim.Adagrad(model.parameters(), lr=self.learning_rate),
+                   'adam':optim.Adam(model.parameters(), lr=self.learning_rate),
+                   'adamw':optim.AdamW(model.parameters(), lr=self.learning_rate),
+                   'sparseadam':optim.SparseAdam(model.parameters(), lr=self.learning_rate),
+                   'adamax':optim.Adamax(model.parameters(), lr=self.learning_rate),
+                   'asgd':optim.ASGD(model.parameters(), lr=self.learning_rate),
+                   'lbfgs':optim.LBFGS(model.parameters(), lr=self.learning_rate),
+                   'rmsprop':optim.RMSprop(model.parameters(), lr=self.learning_rate),
+                   'rprop':optim.Rprop(model.parameters(), lr=self.learning_rate),
+                   'sgd':optim.SGD(model.parameters(), lr=self.learning_rate)}
 
 # -------------------------------------------------- DRUG SENSITIVITY --------------------------------------------------
 
@@ -70,11 +71,13 @@ class Drug_sensitivity_single_cell:
         
         #drug sensitivity
         self.model_architecture = None
-        
-        self.first_layer = None
-        self.second_layer = None
-        self.third_layer = None
-        
+
+        # if NNet
+        self.optimiser = None
+        self.activation_function = None
+        self.layers_info = None
+
+        # if RF
         self.number_trees = None
         
         self.learning_rate = None
@@ -98,12 +101,24 @@ class Drug_sensitivity_single_cell:
     def set_parameters(self, list_parameters):
         self.type_data = list_parameters[0]
         self.model_architecture = list_parameters[15]
+
         if self.model_architecture == 'NNet':
-            layers = list_parameters[1]
-            self.second_layer, self.third_layer = int(layers.split('_')[0]), int(layers.split('_')[1])
-            # self.second_layer = int(list_parameters[1])
+            network_info = list_parameters[1].split('_')
+            self.optimiser = dict_optimisers[network_info[-1]]
+            network_info.pop()
+            self.activation_function = network_info[-1]
+            network_info.pop()
+            layers = {}
+            for i in range(len(network_info)):
+                if i == 0:
+                    layers[str(i+1)] = [network_info[i]]
+                else:
+                    layers[str(i + 1)] = [network_info[i-1], network_info[i]]
+            self.layers_info = layers
+
         else:
             self.number_trees = int(list_parameters[1])
+
         self.learning_rate = float(list_parameters[2])
         self.size_batch = int(list_parameters[3])
         self.n_epochs = int(list_parameters[4])
@@ -117,6 +132,7 @@ class Drug_sensitivity_single_cell:
         self.type_of_split = list_parameters[12]
         self.to_test = list_parameters[13]
         self.data_from = list_parameters[14]
+        self.network_info = list_parameters[16]
         
         #add information to report
         lines = ['** REPORT - DRUG SENSITIVITY **\n',
@@ -263,11 +279,16 @@ class Drug_sensitivity_single_cell:
             torch.manual_seed(self.seed)
             self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
             self.first_layer = int(size_input)
-            model = NN_drug_sensitivity(input_size=self.first_layer, layer2=self.second_layer,
-                                   layer3=self.third_layer, dropout_prob=self.dropout)
+            model = NN_drug_sensitivity(input_size=self.first_layer,
+                                        layers=self.layers_info,
+                                        activation_function=self.activation_function,
+                                        dropout_prob=self.dropout)
             model.to(self.device)
+            # lines = ['\n*About the network',
+            #      'Layers: {} {} {}'.format(self.first_layer, self.second_layer, self.third_layer),
+            #     'Runs on: {} \n'.format(self.device)]
             lines = ['\n*About the network',
-                 'Layers: {} {} {}'.format(self.first_layer, self.second_layer, self.third_layer),
+                 '{}'.format(str(model.modules())),
                 'Runs on: {} \n'.format(self.device)]
         else:
             self.device = 'cpu'
@@ -298,7 +319,7 @@ class Drug_sensitivity_single_cell:
         got_better = False
         n_epochs_not_getting_better = 0
 
-        optimizer = optim.Adam(model.parameters(), lr=self.learning_rate)
+        optimizer = copy.copy(self.optimiser)
         best_model = copy.deepcopy(model.state_dict())  # save the best model yet with the best accuracy and lower loss value
         decay_learning_rate = lr_scheduler.StepLR(optimizer, step_size=self.step_size, gamma=self.gamma)
 
@@ -318,7 +339,7 @@ class Drug_sensitivity_single_cell:
                 print('-' * 10)
                 print('Epoch: {} of {}'.format(epoch + 1, self.n_epochs))
                 if epoch != 0:
-                    optimizer = optim.Adam(model.parameters(), lr=self.learning_rate)
+                    optimizer = copy.copy(self.optimiser)
                     decay_learning_rate = lr_scheduler.StepLR(optimizer, step_size=self.step_size, gamma=self.gamma)
 
             # epoch learning rate value
@@ -328,7 +349,7 @@ class Drug_sensitivity_single_cell:
             start_train_time = time.time()
             train_predictions_complete = []
             model.train()  # set model for training
-            for i, data in enumerate(train_loader, 0):
+            for i, data in enumerate(train_loader):
                 inputs, real_values = data
                 inputs = inputs.to(self.device)
                 real_values = real_values.to(self.device)
@@ -351,7 +372,7 @@ class Drug_sensitivity_single_cell:
             model.eval()
             validation_predictions_complete = []
             with torch.no_grad():
-                for i, data in enumerate(validation_loader, 0):
+                for i, data in enumerate(validation_loader):
                     inputs, real_values = data
                     inputs = inputs.to(self.device)
                     real_values = real_values.to(self.device)
@@ -599,8 +620,12 @@ class Drug_sensitivity_single_cell:
     
     def save_parameters(self):
         if self.model_architecture == 'NNet':
-            layers = '{}_{}'.format(self.second_layer, self.third_layer)
-            pickle.dump([layers, self.learning_rate, self.size_batch, self.n_epochs, self.perc_train, self.perc_val,
+            for k,v in dict_optimisers.items():
+                if k == self.optimiser:
+                    optmiser = v
+                    break
+            network_info = '{}_{}_{}'.format('_'.join(list(self.layers_info.values()), self.activation_function, optmiser))
+            pickle.dump([network_info, self.learning_rate, self.size_batch, self.n_epochs, self.perc_train, self.perc_val,
              self.dropout, self.gamma, self.step_size, self.seed, self.epoch_reset, self.type_of_split,
              self.to_test, self.data_from, self.model_architecture, self.device], open('pickle/list_initial_parameters_single_cell.pkl', 'wb'))
         

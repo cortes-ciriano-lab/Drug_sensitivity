@@ -9,3 +9,4 @@ trained_models/
 .DS_Store
 invalid_smiles.txt
 data
+.idea

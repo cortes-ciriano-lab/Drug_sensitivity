@@ -11,27 +11,63 @@ import torch.nn.functional as F
 class NN_drug_sensitivity(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
-        
+
+        dict_activation_functions = {'elu': nn.ELU(),
+                                     'hardshrink': nn.Hardshrink(),
+                                     'hardsigmoid': nn.Hardsigmoid(),
+                                     'hardtanh': nn.Hardtanh(),
+                                     'hardswish': nn.Hardswish(),
+                                     'leakyrelu': nn.LeakyReLU(),
+                                     'logsigmoid': nn.LogSigmoid(),
+                                     'multiheadattention': nn.MultiheadAttention(),
+                                     'prelu': nn.PReLU(),
+                                     'relu': nn.ReLU(),
+                                     'relu6': nn.ReLU6(),
+                                     'rrelu': nn.RReLU(),
+                                     'selu': nn.SELU(),
+                                     'celu': nn.CELU(),
+                                     'gelu': nn.GELU(),
+                                     'sigmoid': nn.Sigmoid(),
+                                     'silu': nn.SiLU(),
+                                     'softplus': nn.Softplus(),
+                                     'softshrink': nn.Softshrink(),
+                                     'softsign': nn.Softsign(),
+                                     'tanh': nn.Tanh(),
+                                     'tanhshrink': nn.Tanhshrink(),
+                                     'threshold': nn.Threshold()}
         #Defining the sizes of the layers
-        size_input = int(kwargs['input_size']) #size of the input
-        layer2 = int(kwargs['layer2'])
-        layer3 = int(kwargs['layer3'])
+        self.size_input = int(kwargs['input_size']) #size of the input
+        self.layers = kwargs['layers']
+        self.activation_function = dict_activation_functions[kwargs['activation_function']]
         self.dropout_prob = float(kwargs['dropout_prob'])
-        
-        #Definition of the network
-        self.fc1 = nn.Linear(size_input, layer2)
-        # self.fc2 = nn.Linear(layer2, layer3)
-        # self.fc3 = nn.Linear(layer3, 1)
-        
-        self.fc2 = nn.Linear(layer2, 1)
-    
+
+        # #Definition of the network
+        # self.fc1 = nn.Linear(size_input, layer2)
+        # # self.fc2 = nn.Linear(layer2, layer3)
+        # # self.fc3 = nn.Linear(layer3, 1)
+        #
+        # self.fc2 = nn.Linear(layer2, 1)
+        #
     def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = F.dropout(x, self.dropout_prob, inplace = True)
-        # x = F.relu(self.fc2(x))
+        # x = F.relu(self.fc1(x))
         # x = F.dropout(x, self.dropout_prob, inplace = True)
-        # output = self.fc3(x)
-        output = self.fc2(x)
+        # # x = F.relu(self.fc2(x))
+        # # x = F.dropout(x, self.dropout_prob, inplace = True)
+        # # output = self.fc3(x)
+        # output = self.fc2(x)
+        order_steps = []
+        for k,v in self.layers.items():
+            if k == '1':
+                v.insert(0, self.size_input)
+            if k != str(len(self.layers.keys())):
+                layer = nn.Linear(int(v[0]), int(v[1]))
+                act_fun = self.activation_function
+                drop = nn.Dropout(self.dropout_prob, True)
+                order_steps.extend([layer, act_fun, drop])
+            else:
+                layer = nn.Linear(int(v[0]), int(v[1]))
+        output = nn.Sequential(*order_steps)
+
         return output
 
 #-------------------------------------------------- VAE - GENE EXPRESSION - SINGLE CELL --------------------------------------------------
