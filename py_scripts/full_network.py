@@ -5,70 +5,52 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+# -------------------------------------------------- ANOTHER FUNCTIONS --------------------------------------------------
+
+def get_activation_function(af_key, input_value):
+    dict_activation_functions = {'elu': F.elu(input_value), 'hardtanh': F.hardtanh(input_value),
+                                 'leakyrelu': F.leaky_relu(input_value), 'logsigmoid': F.logsigmoid(input_value),
+                                 'relu': F.relu(input_value), 'relu6': F.relu6(input_value),
+                                 'rrelu': F.rrelu(input_value), 'selu': F.selu(input_value),
+                                 'celu': F.celu(input_value), 'sigmoid': F.sigmoid(input_value),
+                                 'softplus': F.softplus(input_value), 'softshrink': F.softshrink(input_value),
+                                 'softsign': F.softsign(input_value), 'tanh': F.tanh(input_value),
+                                 'tanhshrink': F.tanhshrink(input_value), 'gelu':F.gelu(input_value),
+                                 'hardshrink': F.hardshrink(input_value), 'softmin': F.softmin(input_value)}
+    
+    return dict_activation_functions[af_key]
     
 # -------------------------------------------------- FULL NETWORK --------------------------------------------------
 
 class NN_drug_sensitivity(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
-
-        dict_activation_functions = {'elu': nn.ELU(),
-                                     'hardshrink': nn.Hardshrink(),
-                                     'hardsigmoid': nn.Hardsigmoid(),
-                                     'hardtanh': nn.Hardtanh(),
-                                     'hardswish': nn.Hardswish(),
-                                     'leakyrelu': nn.LeakyReLU(),
-                                     'logsigmoid': nn.LogSigmoid(),
-                                     'multiheadattention': nn.MultiheadAttention(),
-                                     'prelu': nn.PReLU(),
-                                     'relu': nn.ReLU(),
-                                     'relu6': nn.ReLU6(),
-                                     'rrelu': nn.RReLU(),
-                                     'selu': nn.SELU(),
-                                     'celu': nn.CELU(),
-                                     'gelu': nn.GELU(),
-                                     'sigmoid': nn.Sigmoid(),
-                                     'silu': nn.SiLU(),
-                                     'softplus': nn.Softplus(),
-                                     'softshrink': nn.Softshrink(),
-                                     'softsign': nn.Softsign(),
-                                     'tanh': nn.Tanh(),
-                                     'tanhshrink': nn.Tanhshrink(),
-                                     'threshold': nn.Threshold()}
+        
         #Defining the sizes of the layers
         self.size_input = int(kwargs['input_size']) #size of the input
-        self.layers = kwargs['layers']
-        self.activation_function = dict_activation_functions[kwargs['activation_function']]
+        layers = kwargs['layers']
+        layers.insert(0, self.size_input)
+        self.layers = []
+        i = 0
+        while i < len(layers) and (i+1) < len(layers):
+            self.layers.append([layers[i],layers[i+1]])
+            i += 1
+        self.activation_function_key = kwargs['activation_function']
         self.dropout_prob = float(kwargs['dropout_prob'])
 
-        # #Definition of the network
-        # self.fc1 = nn.Linear(size_input, layer2)
-        # # self.fc2 = nn.Linear(layer2, layer3)
-        # # self.fc3 = nn.Linear(layer3, 1)
-        #
-        # self.fc2 = nn.Linear(layer2, 1)
-        #
-    def forward(self, x):
-        # x = F.relu(self.fc1(x))
-        # x = F.dropout(x, self.dropout_prob, inplace = True)
-        # # x = F.relu(self.fc2(x))
-        # # x = F.dropout(x, self.dropout_prob, inplace = True)
-        # # output = self.fc3(x)
-        # output = self.fc2(x)
-        order_steps = []
-        for k,v in self.layers.items():
-            if k == '1':
-                v.insert(0, self.size_input)
-            if k != str(len(self.layers.keys())):
-                layer = nn.Linear(int(v[0]), int(v[1]))
-                act_fun = self.activation_function
-                drop = nn.Dropout(self.dropout_prob, True)
-                order_steps.extend([layer, act_fun, drop])
-            else:
-                layer = nn.Linear(int(v[0]), int(v[1]))
-        output = nn.Sequential(*order_steps)
+        #Definition of the network
+        self.fc_layers = nn.ModuleList()
+        for i in range(len(self.layers)):
+            self.fc_layers.append(nn.Linear(int(self.layers[i][0]), int(self.layers[i][1])))
 
-        return output
+    def forward(self, x):
+        for i, l in enumerate(self.fc_layers):
+            x = get_activation_function(self.activation_function_key, self.fc_layers[i](x))
+            if i != len(self.layers):
+                x = F.dropout(x, self.dropout_prob, inplace = True)
+
+        return x
 
 #-------------------------------------------------- VAE - GENE EXPRESSION - SINGLE CELL --------------------------------------------------
 

@@ -91,19 +91,10 @@ class Drug_sensitivity_single_cell:
 
         if self.model_architecture == 'NNet':
             network_info = list_parameters[1].split('_')
-            self.optimiser = dict_optimisers[network_info[-1]]
-            network_info.pop()
-            self.activation_function = network_info[-1]
-            network_info.pop()
-            layers = {}
-            for i in range(len(network_info)):
-                if i == 0:
-                    layers[str(i+1)] = [network_info[i]]
-                elif i == len(network_info) - 1:
-                    layers[str(i+2)] = [network_info[i], 1]
-                else:
-                    layers[str(i + 1)] = [network_info[i-1], network_info[i]]
-            self.layers_info = layers
+            self.optimiser = network_info[-1]
+            self.activation_function = network_info[-2]
+            self.layers_info = [x for x in network_info[:-2]]
+            self.layers_info.append('1')
 
         else:
             self.number_trees = int(list_parameters[1])
@@ -121,7 +112,6 @@ class Drug_sensitivity_single_cell:
         self.type_of_split = list_parameters[12]
         self.to_test = list_parameters[13]
         self.data_from = list_parameters[14]
-        self.network_info = list_parameters[16]
         
         #add information to report
         lines = ['** REPORT - DRUG SENSITIVITY **\n',
@@ -154,7 +144,7 @@ class Drug_sensitivity_single_cell:
                 list_barcodes = []
                 for i in list_tumours:
                     list_barcodes.extend(barcodes_per_tumour[i])
-                print(len(list_barcodes))
+                list_barcodes = list_barcodes[:500]
                 list_final_indexes = []
                 for i in range(len(list_new_indexes)):
                     barcode = list_new_indexes[i].strip('\n').split('::')[0]
@@ -168,10 +158,10 @@ class Drug_sensitivity_single_cell:
                 
                 list_final_indexes = shuffle(list_final_indexes)
                 
-                if len(list_final_indexes) > 50000:
-                    list_final_indexes = list_final_indexes[:50000]
+                # if len(list_final_indexes) > 50000:
+                #     list_final_indexes = list_final_indexes[:50000]
                 
-                # list_final_indexes = list_final_indexes[:1000]
+                list_final_indexes = list_final_indexes[:500]
                 
                 
                 train_number = int(self.perc_train * len(list_final_indexes))
@@ -307,7 +297,7 @@ class Drug_sensitivity_single_cell:
                    'rmsprop':optim.RMSprop(model.parameters(), lr=self.learning_rate),
                    'rprop':optim.Rprop(model.parameters(), lr=self.learning_rate),
                    'sgd':optim.SGD(model.parameters(), lr=self.learning_rate)}
-        
+        # 
         train_loader = torch.utils.data.DataLoader(train_set, batch_size=self.size_batch, shuffle=False)
         validation_loader = torch.utils.data.DataLoader(validation_set, batch_size=self.size_batch, shuffle=False)
         
@@ -320,7 +310,7 @@ class Drug_sensitivity_single_cell:
         got_better = False
         n_epochs_not_getting_better = 0
 
-        optimizer = copy.copy(self.optimiser)
+        optimizer = dict_optimisers[self.optimiser]
         best_model = copy.deepcopy(model.state_dict())  # save the best model yet with the best accuracy and lower loss value
         decay_learning_rate = lr_scheduler.StepLR(optimizer, step_size=self.step_size, gamma=self.gamma)
 
@@ -340,7 +330,7 @@ class Drug_sensitivity_single_cell:
                 print('-' * 10)
                 print('Epoch: {} of {}'.format(epoch + 1, self.n_epochs))
                 if epoch != 0:
-                    optimizer = copy.copy(self.optimiser)
+                    optimizer = dict_optimisers[self.optimiser]
                     decay_learning_rate = lr_scheduler.StepLR(optimizer, step_size=self.step_size, gamma=self.gamma)
 
             # epoch learning rate value
@@ -360,7 +350,7 @@ class Drug_sensitivity_single_cell:
                 train_current_loss.backward()  # backpropagation
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
                 optimizer.step()
-                train_predictions_complete.extend(x[0] for x in train_predictions.detach().cpu().numpy().tolist())
+                train_predictions_complete.extend(train_predictions.detach().cpu().numpy().tolist())
                 train_loss_epoch += train_current_loss.item()
             
             train_loss_epoch = train_loss_epoch / len(train_loader)
@@ -380,7 +370,7 @@ class Drug_sensitivity_single_cell:
                     validation_predictions = model(inputs)  # output predicted by the model
                     validation_current_loss = self.__loss_function(real_values, validation_predictions)
                     validation_loss_epoch += validation_current_loss.item()
-                    validation_predictions_complete.extend(x[0] for x in validation_predictions.cpu().numpy().tolist())
+                    validation_predictions_complete.extend(validation_predictions.cpu().numpy().tolist())
             
             validation_loss_epoch = validation_loss_epoch / len(validation_loader)
             end_validation_time = time.time()
@@ -392,9 +382,9 @@ class Drug_sensitivity_single_cell:
                 best_model = copy.deepcopy(model.state_dict())
                 print(validation_predictions_complete[:10])
                 with open('pickle/validation_output.txt', 'w') as f:
-                    f.write('\n'.join(['{:f}'.format(x) for x in validation_predictions_complete]))
+                    f.write('\n'.join(['{:f}'.format(x[0]) for x in validation_predictions_complete]))
                 with open('pickle/train_output.txt', 'w') as f:
-                    f.write('\n'.join(['{:f}'.format(x) for x in train_predictions_complete]))
+                    f.write('\n'.join(['{:f}'.format(x[0]) for x in train_predictions_complete]))
                 got_better = True
                 n_epochs_not_getting_better = 0
                 pickle.dump(best_model, open('pickle/best_model_parameters.pkl', 'wb'))
@@ -531,14 +521,14 @@ class Drug_sensitivity_single_cell:
                 test_predictions = model(inputs)  # output predicted by the model
                 current_loss = self.__loss_function(real_values, test_predictions)
                 test_loss += current_loss.item()
-                test_predictions_complete.extend(x[0] for x in test_predictions.cpu().numpy().tolist())
+                test_predictions_complete.extend(test_predictions.cpu().numpy().tolist())
         
         loss = test_loss / len(test_loader)
         
         print('Test loss: {:.2f} \n'.format(loss))
         create_report(self.filename_report, ['Testing loss: {:.2f}'.format(loss)])
         with open('pickle/test_output.txt', 'w') as f:
-            f.write('\n'.join(['{:f}'.format(x) for x in test_predictions_complete]))
+            f.write('\n'.join(['{:f}'.format(x[0]) for x in test_predictions_complete]))
         return test_predictions_complete
     
     # --------------------------------------------------
@@ -621,11 +611,7 @@ class Drug_sensitivity_single_cell:
     
     def save_parameters(self):
         if self.model_architecture == 'NNet':
-            for k,v in dict_optimisers.items():
-                if k == self.optimiser:
-                    optmiser = v
-                    break
-            network_info = '{}_{}_{}'.format('_'.join(list(self.layers_info.values()), self.activation_function, optmiser))
+            network_info = '{}_{}_{}'.format(self.layers_info[-1], self.activation_function, self.optimiser)
             pickle.dump([network_info, self.learning_rate, self.size_batch, self.n_epochs, self.perc_train, self.perc_val,
              self.dropout, self.gamma, self.step_size, self.seed, self.epoch_reset, self.type_of_split,
              self.to_test, self.data_from, self.model_architecture, self.device], open('pickle/list_initial_parameters_single_cell.pkl', 'wb'))
@@ -682,6 +668,8 @@ def run_drug_prediction(list_parameters):
         f.write('\n'.join(['{:f}'.format(x) for x in train_set_sensitivity]))
     if model_architecture == 'NNet':
         train_set = torch.tensor(list(train_set.values())).type('torch.FloatTensor')
+        train_set_sensitivity = [[x] for x in train_set_sensitivity]
+        print(train_set_sensitivity[:5])
         train_set_sensitivity = torch.tensor(train_set_sensitivity).type('torch.FloatTensor')
         train_data = TensorDataset(train_set, train_set_sensitivity)
     else:
@@ -727,6 +715,7 @@ def run_drug_prediction(list_parameters):
         with open('pickle/validation_set_real_values.txt', 'w') as f:
             f.write('\n'.join(['{:f}'.format(x) for x in validation_set_sensitivity]))
         validation_set = torch.tensor(list(validation_set.values())).type('torch.FloatTensor')
+        validation_set_sensitivity = [[x] for x in validation_set_sensitivity]
         validation_set_sensitivity =  torch.tensor(validation_set_sensitivity).type('torch.FloatTensor')
         validation_data = TensorDataset(validation_set, validation_set_sensitivity)
         
@@ -743,6 +732,7 @@ def run_drug_prediction(list_parameters):
     if model_architecture == 'NNEt':
         with open('pickle/validation_output.txt', 'r') as f:
             validation_output = f.readlines()
+        validation_output = [x.strip('\n') for x in validation_output]
         for i in range(len(validation_output)):
             index = validation_set_index[i]
             value = validation_output[i]
@@ -758,6 +748,7 @@ def run_drug_prediction(list_parameters):
 
     with open('pickle/train_output.txt', 'r') as f:
         train_output = f.readlines()
+    train_output = [x.strip('\n') for x in train_output]
     for i in range(len(train_output)):
         index = train_set_index[i]
         value = train_output[i]
@@ -805,6 +796,7 @@ def run_drug_prediction(list_parameters):
         f.write('\n'.join(['{:f}'.format(x) for x in test_set_sensitivity]))
     if model_architecture == 'NNet':
         test_set = torch.tensor(list(test_set.values())).type('torch.FloatTensor')
+        test_set_sensitivity = [[x] for x in test_set_sensitivity]
         test_set_sensitivity = torch.tensor(test_set_sensitivity).type('torch.FloatTensor')
         test_data = TensorDataset(test_set, test_set_sensitivity)
     else:
@@ -816,6 +808,7 @@ def run_drug_prediction(list_parameters):
     gc.collect()
     
     test_output = drug_sens.run_test_set(model_trained, test_data)
+    test_output = [x[0] for x in test_output]
         
     free_memory = [model_trained, test_data]
     for item in free_memory:
@@ -856,8 +849,8 @@ def run_drug_prediction(list_parameters):
         train_predictions = f.readlines()
     with open('pickle/train_set_real_values.txt', 'r') as f:
         train_set_sensitivity = f.readlines()
-    train_predictions = [x.strip('\n') for x in train_predictions]
-    train_set_sensitivity = [x.strip('\n') for x in train_set_sensitivity]
+    train_predictions = [float(x.strip('\n')) for x in train_predictions]
+    train_set_sensitivity = [float(x.strip('\n')) for x in train_set_sensitivity]
     corr_value, _ = pearsonr(np.array(train_set_sensitivity), np.array(train_predictions))
     make_correlation_plot(train_set_sensitivity, train_predictions, train_set_index, 'Training_set')
     lines = ['\n \n** CORRELATION VALUES **',
@@ -874,8 +867,8 @@ def run_drug_prediction(list_parameters):
             validation_predictions = f.readlines()
         with open('pickle/validation_set_real_values.txt', 'r') as f:
             validation_set_sensitivity = f.readlines()
-        validation_predictions = [x.strip('\n') for x in validation_predictions]
-        validation_set_sensitivity = [x.strip('\n') for x in validation_set_sensitivity]
+        validation_predictions = [float(x.strip('\n')) for x in validation_predictions]
+        validation_set_sensitivity = [float(x.strip('\n')) for x in validation_set_sensitivity]
         corr_value, _ = pearsonr(np.array(validation_set_sensitivity), np.array(validation_predictions))
         make_correlation_plot(validation_set_sensitivity, validation_predictions, validation_set_index, 'Validation_set')
         lines = ['Validation set: {}'.format(corr_value),
@@ -887,8 +880,8 @@ def run_drug_prediction(list_parameters):
             del item
         gc.collect()
     
-    test_output = [x.strip('\n') for x in test_output]
-    test_set_sensitivity = [x.strip('\n') for x in test_set_sensitivity]
+    # test_output = [x.strip('\n') for x in test_output]
+    # test_set_sensitivity = [x.strip('\n') for x in test_set_sensitivity]
     corr_value, _ = pearsonr(np.array(test_set_sensitivity), np.array(test_output))
     make_correlation_plot(test_set_sensitivity, test_output, test_set_index, 'Test_set')
     lines = ['Test set: {}'.format(corr_value),
