@@ -2,23 +2,23 @@
 
 #NNet
 for type_data in "single_cell" ; do #"bulk"
-    for layers in "64_32" "150_100_50" "128_64_32" "128_64_32_16" "128_32" ; do # 
-    	for af in "relu" "elu" "hardtanh" "leakyrelu" "logsigmoid" "relu6" "rrelu" "selu" "celu" "sigmoid" "softplus" "softshrink" "softsign" "tanh" "tanhshrink" "gelu" "hardshrink" "softmin"; do
-        	for op in "adam" "adagrad" "adamw" "sparseadam" "adamax" "asgd" "lbfgs" "rmsprop" "rprop" "sgd" ; do
+    for layers in "64_32" ; do #"150_100_50" "128_64_32" "128_64_32_16" "128_32" 
+    	for af in "relu"; do # "rrelu" "elu" "hardtanh" "leakyrelu" "logsigmoid" "relu6" "selu" "celu" "sigmoid" "softplus" "softshrink" "softsign" "tanh" "tanhshrink" "gelu" "hardshrink" "softmin"; do
+        	for op in "adam" ; do #"sgd" "rmsprop" "adagrad" "adamw" "sparseadam" "adamax" "asgd" "lbfgs" "rprop" ; do
         		network_info="${layers}_${af}_${op}"
-		        for lr in "0.01" "0.001" "0.1" "0.00001" ; do
+		        for lr in "0.00001" ; do #"0.01" "0.05"  "0.001" "0.1" "0.0001"
 		            for size_batch in "64" ; do #"100"
 		                for n_epoch in "500" ; do
 		                    perc_train="0.7"
 		                    perc_val="0.15"
-                            for epoch_reset in "100" "50" ; do
+                            for epoch_reset in "100" ; do #"500" ; do
                                 for dropout in "0.1"  ; do #"0.5"
                                     for gam in "0.6" ; do
-                                        for seed in "42" ; do # "974" "110" "300" "1" "76" ; do
+                                        for seed in "42" ; do #"974" ; do #"110" "300" "1" "76" ; do
                                             if [ "${epoch_reset}" == "100" ] ;  then
                                                 step="25"
-                                            elif [ "${epoch_reset}" == "50" ] ;  then
-                                                step="10"
+                                            elif [ "${epoch_reset}" == "500" ] ;  then
+                                                step="50"
                                             fi
                                             for data_from in "pancancer" ; do #"mcfarland", "science"
                                                 for type_split in "random" ; do #"leave-one-cell-line-out" "leave-one-tumour-out"
@@ -38,8 +38,8 @@ for type_data in "single_cell" ; do #"bulk"
                                                         mkdir -p "/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/results/${type_data}/${data_from}/${model}_${network_info}_${lr}_${size_batch}_${n_epoch}_${perc_train}_${perc_val}_${dropout}_${gam}_${step}_${seed}_${epoch_reset}_${type_split}_${to_test}" && cd $_
                                                         mkdir -p pickle model_values plots
                                                                 
-                                                        #bsub -P gpu -gpu - -M 20G -e e.log -o o.log -J drug "python /hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/py_scripts/drug_sensitivity.py $type_data $network_info $lr $size_batch $n_epoch $perc_train $perc_val $dropout $gam $step $seed $epoch_reset $type_split $to_test $data_from $model"
-                                                        bsub -P gpu -gpu - -M 5G -e e.log -o o.log -J drug "python /hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/py_scripts/drug_sensitivity.py $type_data $network_info $lr $size_batch $n_epoch $perc_train $perc_val $dropout $gam $step $seed $epoch_reset $type_split $to_test $data_from $model"
+                                                        bsub -P gpu -gpu - -M 40G -e e.log -o o.log -J drug "python /hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/py_scripts/drug_sensitivity.py $type_data $network_info $lr $size_batch $n_epoch $perc_train $perc_val $dropout $gam $step $seed $epoch_reset $type_split $to_test $data_from $model"
+                                                        #bsub -P gpu -gpu - -M 5G -e e.log -o o.log -J drug "python /hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/py_scripts/drug_sensitivity.py $type_data $network_info $lr $size_batch $n_epoch $perc_train $perc_val $dropout $gam $step $seed $epoch_reset $type_split $to_test $data_from $model"
                                                         echo "output_${model}_${network_info}_${lr}_${size_batch}_${n_epoch}_${perc_train}_${perc_val}_${dropout}_${gam}_${step}_${seed}_${epoch_reset}_${type_split}_${to_test}.txt" >> "/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/list_original_parameters_${type_data}_${data_from}.txt"
                                                     done
                                                 done

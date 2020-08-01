@@ -10,3 +10,5 @@ trained_models/
 invalid_smiles.txt
 data
 .idea
+check_cases.txt
+results_smaller/

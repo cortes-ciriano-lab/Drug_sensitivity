@@ -175,10 +175,9 @@ class Process_dataset_pancancer():
             barcodes = shuffle(barcodes)
             barcodes = barcodes[:10] #to reduce the dimensions of the final dataset we select 10 random single cells of each cell line
             for screen in screens_list:
-                if not np.isnan(sensitivity_value.loc[cell_line_dep_map, screen.split(':::')[0]]):
-                    for bar in barcodes:
-                        new_indexes.append('{}::{}'.format(bar, screen))
-                        total += 1
+                for bar in barcodes:
+                    new_indexes.append('{}::{}'.format(bar, screen))
+                    total += 1
             if len(new_indexes) > 50000:
                 with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_new_indexes_{}.txt'.format(what_type), 'a') as f:
                     f.write('\n'.join(new_indexes))
@@ -258,22 +257,24 @@ class Process_dataset_pancancer():
         gc.collect()
         
         cell_line_barcode = {}
+        dep_map_barcode = {}
         for k,v in self.barcodes_per_cell_line.items():
             for i in v:
                 cell_line_barcode[i] = k
-        
+                dep_map_barcode[i] = self.ccle2depmap[k]
+                
         # pickle.dump(barcodes_per_tumour, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/barcodes_per_tumour_dict.pkl', 'wb'))
         # pickle.dump(self.ccle2depmap, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/ccle2depmap_dict.pkl', 'wb'))
         # pickle.dump(self.depmap2ccle, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/depmap2ccle_dict.pkl', 'wb'))
         # pickle.dump(self.barcodes_per_cell_line, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/barcodes_per_cell_line_dict.pkl', 'wb'))
         # pickle.dump(cell_line_barcode, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/cell_line_barcode_dict.pkl', 'wb'))
-        
+        pickle.dump(dep_map_barcode, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/dep_map_per_barcode.pkl', 'wb'))
         
         # just once
-        # list_indexes_prism = create_prism_bottleneck_run_once()
-        # with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_screens_once.txt', 'w') as f:
-        #     f.write('\n'.join(list(list_indexes_prism)))
-        # 
+        list_indexes_prism = create_prism_bottleneck_run_once()
+        with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_screens_once.txt', 'w') as f:
+            f.write('\n'.join(list(list_indexes_prism)))
+        
         # _ = create_pancancer_bottleneck()
         # #create the integrate files
         # self.create_integrated_datasets(list_cell_lines_prism, list_indexes_prism, prism_matrix, 'once')
