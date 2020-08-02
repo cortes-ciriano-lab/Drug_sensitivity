@@ -12,3 +12,5 @@ data
 .idea
 check_cases.txt
 results_smaller/
+list_best_parameters_pancancer.txt
+loss_results_pancancer.txt

@@ -381,7 +381,6 @@ class Drug_sensitivity_single_cell:
             if epoch == 0 or validation_loss_epoch < best_loss[1]:  # means that this model is best one yet
                 best_loss = (train_loss_epoch, validation_loss_epoch)
                 best_model = copy.deepcopy(model.state_dict())
-                print(validation_predictions_complete[:10])
                 with open('pickle/validation_output.txt', 'w') as f:
                     f.write('\n'.join(['{:f}'.format(x[0]) for x in validation_predictions_complete]))
                 with open('pickle/train_output.txt', 'w') as f:
@@ -856,15 +855,15 @@ def run_drug_prediction(list_parameters):
         train_set_sensitivity = f.readlines()
     train_predictions = np.array([float(x.strip('\n')) for x in train_predictions])
     train_set_sensitivity = np.array([float(x.strip('\n')) for x in train_set_sensitivity])
-    lines = ['\nTrain real values max: {:.2f}'.format(train_set_sensitivity.max()),
-             'Train real values min: {:.2f}'.format(train_set_sensitivity.min()),
-             'Train predicted values max: {:.2f}'.format(train_predictions.max()),
-             'Train predicted values min: {:.2f}'.format(train_predictions.min())]
+    lines = ['\nTraining real values max: {:.2f}'.format(train_set_sensitivity.max()),
+             'Training real values min: {:.2f}'.format(train_set_sensitivity.min()),
+             'Training predicted values max: {:.2f}'.format(train_predictions.max()),
+             'Training predicted values min: {:.2f}'.format(train_predictions.min()),
+             '\n']
     create_report(filename, lines)
     corr_value, _ = pearsonr(train_set_sensitivity, train_predictions)
     make_correlation_plot(train_set_sensitivity, train_predictions, train_set_index, 'Training_set')
-    lines = ['\n \n** CORRELATION VALUES **',
-             'Training correlation: {}'.format(corr_value),
+    lines = ['Training correlation: {}'.format(corr_value),
              '\n']
     create_report(filename, lines)
     free_memory = [train_predictions, train_set_sensitivity, train_set_index, corr_value, lines]
@@ -882,7 +881,8 @@ def run_drug_prediction(list_parameters):
         lines = ['\nValidation real values max: {:.2f}'.format(validation_set_sensitivity.max()),
                  'Validation real values min: {:.2f}'.format(validation_set_sensitivity.min()),
                  'Validation predicted values max: {:.2f}'.format(validation_predictions.max()),
-                 'Validation predicted values min: {:.2f}'.format(validation_predictions.min())]
+                 'Validation predicted values min: {:.2f}'.format(validation_predictions.min()),
+                 '\n']
         create_report(filename, lines)
         corr_value, _ = pearsonr(validation_set_sensitivity, validation_predictions)
         make_correlation_plot(validation_set_sensitivity, validation_predictions, validation_set_index, 'Validation_set')
@@ -898,16 +898,15 @@ def run_drug_prediction(list_parameters):
     # test_output = [x.strip('\n') for x in test_output]
     test_set_sensitivity = np.array([x.numpy().tolist()[0] for x in test_set_sensitivity])
     test_output = np.array([x[0] for x in test_output])
-    lines = ['\nTest real values max: {:.2f}'.format(test_set_sensitivity.max()),
-             'Test real values min: {:.2f}'.format(test_set_sensitivity.min()),
-             'Test predicted values max: {:.2f}'.format(test_output.max()),
-             'Test predicted values min: {:.2f}'.format(test_output.min())]
+    lines = ['\nTesting real values max: {:.2f}'.format(test_set_sensitivity.max()),
+             'Testing real values min: {:.2f}'.format(test_set_sensitivity.min()),
+             'Testing predicted values max: {:.2f}'.format(test_output.max()),
+             'Testing predicted values min: {:.2f}'.format(test_output.min()),
+             '\n']
     create_report(filename, lines)
-    print(test_set_sensitivity[:5])
-    print(test_output[:5])
     corr_value, _ = pearsonr(test_set_sensitivity, test_output)
     make_correlation_plot(test_set_sensitivity, test_output, test_set_index, 'Test_set')
-    lines = ['Test correlation: {}'.format(corr_value),
+    lines = ['Testing correlation: {}'.format(corr_value),
              '\n']
     create_report(filename, lines)
     
