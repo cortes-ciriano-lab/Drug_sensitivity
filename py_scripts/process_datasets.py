@@ -160,7 +160,7 @@ class Process_dataset_pancancer():
 
     # --------------------------------------------------
     
-    def create_integrated_datasets(self, list_drug_data_index, screens_list, sensitivity_value, what_type):
+    def create_integrated_datasets(self, list_drug_data_index, screens_list, sensitivity_values, what_type):
         '''
         This function will not create the dataset because it would lead to a really big dataset. Instead, the different indexes from either dataset will be
         combined and the new indexes will be exported to a file.
@@ -173,19 +173,20 @@ class Process_dataset_pancancer():
             cell_line_dep_ccle = self.depmap2ccle[cell_line_dep_map] #converted ccle id for the cell line
             barcodes = self.barcodes_per_cell_line[cell_line_dep_ccle] #barcodes for the cell line in single cell dataset
             barcodes = shuffle(barcodes)
-            barcodes = barcodes[:10] #to reduce the dimensions of the final dataset we select 10 random single cells of each cell line
+            barcodes = barcodes[:5] #to reduce the dimensions of the final dataset we select 5 random single cells of each cell line
             for screen in screens_list:
                 for bar in barcodes:
-                    new_indexes.append('{}::{}'.format(bar, screen))
-                    total += 1
+                    if not np.isnan(sensitivity_values.loc[cell_line_dep_map, screen.split(':::')[0]]):
+                        new_indexes.append('{}::{}'.format(bar, screen))
+                        total += 1
             if len(new_indexes) > 50000:
-                with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_new_indexes_{}.txt'.format(what_type), 'a') as f:
+                with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_new_indexes_5percell_line_{}.txt'.format(what_type), 'a') as f:
                     f.write('\n'.join(new_indexes))
                     f.write('\n')
                 new_indexes = []
         
         if new_indexes:
-            with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_new_indexes_{}.txt'.format(what_type), 'a') as f:
+            with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_new_indexes_5percell_line_{}.txt'.format(what_type), 'a') as f:
                 f.write('\n'.join(new_indexes))
         
         print(total)
@@ -228,20 +229,20 @@ class Process_dataset_pancancer():
         
         list_cell_lines_prism = list(prism_matrix.index)
         
-        # with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_cell_lines_depmap.txt', 'w') as f:
-        #     f.write('\n'.join(list_cell_lines_prism))
-        # with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_cell_lines_pancancer.txt', 'w') as f:
-        #     f.write('\n'.join(list(pancancer_metadata['Cell_line'].unique())))  
-        # with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_tumours.txt', 'w') as f:
-        #     f.write('\n'.join(list(pancancer_metadata['Cancer_type'].unique())))
-        # with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_barcodes_sc.txt', 'w') as f:
-        #     f.write('\n'.join(list(pancancer_data.index)))
+        with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_cell_lines_depmap.txt', 'w') as f:
+            f.write('\n'.join(list_cell_lines_prism))
+        with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_cell_lines_pancancer.txt', 'w') as f:
+            f.write('\n'.join(list(pancancer_metadata['Cell_line'].unique())))  
+        with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_tumours.txt', 'w') as f:
+            f.write('\n'.join(list(pancancer_metadata['Cancer_type'].unique())))
+        with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_barcodes_sc.txt', 'w') as f:
+            f.write('\n'.join(list(pancancer_data.index)))
                     
         
-        # pickle.dump(prism_metadata, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/pkl_files/prism_metadata.pkl', 'wb'))
-        # pickle.dump(pancancer_data, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/pkl_files/pancancer_dataset.pkl', 'wb'), protocol = 4)
-        # pickle.dump(prism_matrix, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/pkl_files/prism_dataset.pkl', 'wb'), protocol = 4)
-        # pickle.dump(pancancer_metadata, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/pkl_files/pancancer_metadata.pkl', 'wb'))
+        pickle.dump(prism_metadata, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/pkl_files/prism_metadata.pkl', 'wb'))
+        pickle.dump(pancancer_data, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/pkl_files/pancancer_dataset.pkl', 'wb'), protocol = 4)
+        pickle.dump(prism_matrix, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/pkl_files/prism_dataset.pkl', 'wb'), protocol = 4)
+        pickle.dump(pancancer_metadata, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/pkl_files/pancancer_metadata.pkl', 'wb'))
         # 
         barcodes_per_tumour = {}
         for i in range(pancancer_metadata.shape[0]):
@@ -263,11 +264,11 @@ class Process_dataset_pancancer():
                 cell_line_barcode[i] = k
                 dep_map_barcode[i] = self.ccle2depmap[k]
                 
-        # pickle.dump(barcodes_per_tumour, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/barcodes_per_tumour_dict.pkl', 'wb'))
-        # pickle.dump(self.ccle2depmap, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/ccle2depmap_dict.pkl', 'wb'))
-        # pickle.dump(self.depmap2ccle, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/depmap2ccle_dict.pkl', 'wb'))
-        # pickle.dump(self.barcodes_per_cell_line, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/barcodes_per_cell_line_dict.pkl', 'wb'))
-        # pickle.dump(cell_line_barcode, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/cell_line_barcode_dict.pkl', 'wb'))
+        pickle.dump(barcodes_per_tumour, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/barcodes_per_tumour_dict.pkl', 'wb'))
+        pickle.dump(self.ccle2depmap, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/ccle2depmap_dict.pkl', 'wb'))
+        pickle.dump(self.depmap2ccle, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/depmap2ccle_dict.pkl', 'wb'))
+        pickle.dump(self.barcodes_per_cell_line, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/barcodes_per_cell_line_dict.pkl', 'wb'))
+        pickle.dump(cell_line_barcode, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/cell_line_barcode_dict.pkl', 'wb'))
         pickle.dump(dep_map_barcode, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/dep_map_per_barcode.pkl', 'wb'))
         
         # just once
@@ -275,24 +276,24 @@ class Process_dataset_pancancer():
         with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_screens_once.txt', 'w') as f:
             f.write('\n'.join(list(list_indexes_prism)))
         
-        # _ = create_pancancer_bottleneck()
-        # #create the integrate files
-        # self.create_integrated_datasets(list_cell_lines_prism, list_indexes_prism, prism_matrix, 'once')
-        # 
-        # del list_indexes_prism
-        # gc.collect()
+        _ = create_pancancer_bottleneck()
+        #create the integrate files
+        self.create_integrated_datasets(list_cell_lines_prism, list_indexes_prism, prism_matrix, 'once')
+        
+        del list_indexes_prism
+        gc.collect()
         
         #500 iterations
-        list_indexes_prism = create_prism_bottleneck_only_valids(500)
-        with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_screens_500iterations.txt', 'w') as f:
-            f.write('\n'.join(list(list_indexes_prism)))
-        self.create_integrated_datasets(list_cell_lines_prism, list_indexes_prism, prism_matrix, '500iterations')
+        # list_indexes_prism = create_prism_bottleneck_only_valids(500)
+        # with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_screens_500iterations.txt', 'w') as f:
+        #     f.write('\n'.join(list(list_indexes_prism)))
+        # self.create_integrated_datasets(list_cell_lines_prism, list_indexes_prism, prism_matrix, '500iterations')
         
         #10000 iterations
-        list_indexes_prism = create_prism_bottleneck_only_valids(10000)
-        with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_screens_10000iterations.txt', 'w') as f:
-            f.write('\n'.join(list(list_indexes_prism)))
-        self.create_integrated_datasets(list_cell_lines_prism, list_indexes_prism, prism_matrix, '10000iterations')
+        # list_indexes_prism = create_prism_bottleneck_only_valids(10000)
+        # with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_screens_10000iterations.txt', 'w') as f:
+        #     f.write('\n'.join(list(list_indexes_prism)))
+        # self.create_integrated_datasets(list_cell_lines_prism, list_indexes_prism, prism_matrix, '10000iterations')
         
         print('DONE!')
 # -------------------------------------------------- INPUT --------------------------------------------------
