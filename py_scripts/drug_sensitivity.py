@@ -579,6 +579,7 @@ class Drug_sensitivity_single_cell:
 
         minimum_loss = min(min(loss_training), min(loss_validation))
         maximum_loss = max(max(loss_training), max(loss_validation))
+        filename = self.filename_report.split('output_')[-1]
 
         fig = plt.figure(figsize=(12, 16))
         (ax1, ax3) = fig.subplots(2, 1, sharex=True, gridspec_kw={'height_ratios': [3, 1]})
@@ -592,7 +593,7 @@ class Drug_sensitivity_single_cell:
         ax3.plot(x, learning_rates, color='b', label='Learning rates')
         fig.legend(loc=1)
         fig.tight_layout()
-        plt.savefig('plots/Values_per_epoch.png')
+        plt.savefig('plots/Values_per_epoch_{}.png'.format(filename))
    
    # --------------------------------------------------
 
