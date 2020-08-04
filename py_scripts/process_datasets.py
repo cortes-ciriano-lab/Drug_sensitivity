@@ -162,11 +162,11 @@ class Process_dataset_pancancer():
     
     def create_integrated_datasets(self, list_drug_data_index, screens_list, sensitivity_values, what_type):
         '''
-        This function will not create the dataset because it would lead to a really big dataset. Instead, the different indexes from either dataset will be
-        combined and the new indexes will be exported to a file.
+        This function will not create the dataset because it would lead to a really big one. Instead, the different indexes from
+        both datasets will be combined and the new indexes will be added to a dictionary (per barcode) and exported to a pkl file.
         '''
         
-        new_indexes = []
+        new_indexes = {}
         total = 0 #to confirm later on the number of new indexes
         for i in range(len(list_drug_data_index)): 
             cell_line_dep_map = list_drug_data_index[i] #depmap cell line tested in the prism dataset 
@@ -174,20 +174,13 @@ class Process_dataset_pancancer():
             barcodes = self.barcodes_per_cell_line[cell_line_dep_ccle] #barcodes for the cell line in single cell dataset
             barcodes = shuffle(barcodes)
             barcodes = barcodes[:5] #to reduce the dimensions of the final dataset we select 5 random single cells of each cell line
-            for screen in screens_list:
-                for bar in barcodes:
+            for bar in barcodes:
+                for screen in screens_list:
+                    list_indexes = []
                     if not np.isnan(sensitivity_values.loc[cell_line_dep_map, screen.split(':::')[0]]):
-                        new_indexes.append('{}::{}'.format(bar, screen))
-                        total += 1
-            if len(new_indexes) > 50000:
-                with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_new_indexes_5percell_line_{}.txt'.format(what_type), 'a') as f:
-                    f.write('\n'.join(new_indexes))
-                    f.write('\n')
-                new_indexes = []
-        
-        if new_indexes:
-            with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_new_indexes_5percell_line_{}.txt'.format(what_type), 'a') as f:
-                f.write('\n'.join(new_indexes))
+                        list_indexes.append('{}::{}'.format(bar, screen))
+                new_indexes[bar] = list_indexes
+        pickle.dump(new_indexes, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_new_indexes_5percell_line_{}.txt'.format(what_type), 'rb'))
         
         print(total)
         
