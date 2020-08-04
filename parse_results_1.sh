@@ -1,4 +1,5 @@
 #!/bin/bash
+rm list_best_parameters_pancancer.txt loss_results_pancancer.txt check_cases.txt
 
 for file in results/single_cell/pancancer/out*
 do
@@ -27,4 +28,4 @@ do
 done
 
 
-python "py_scripts/parse_results.py"
+bsub -P gpu -gpu - -M 30G -e e_parse.log -o o_parse.log -J parse_res "python py_scripts/parse_results.py"
