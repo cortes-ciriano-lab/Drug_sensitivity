@@ -8,17 +8,17 @@ for type_data in "single_cell" ; do #"bulk"
         		network_info="${layers}_${af}_${op}"
 		        for lr in "0.00001" "0.01" "0.05"  "0.001" "0.1" "0.0001" ; do
 		            for size_batch in "64" ; do
-		                for n_epoch in "5000" ; do
+		                for n_epoch in "10000" ; do
 		                    perc_train="0.7"
 		                    perc_val="0.15"
-                            for epoch_reset in "500" "100" ; do
+                            for epoch_reset in "1000" ; do
                                 for dropout in "0.1"  ; do 
                                     for gam in "0.6" ; do
                                         for seed in "42" ; do
-                                            if [ "${epoch_reset}" == "100" ] ;  then
-                                                step="25"
-                                            elif [ "${epoch_reset}" == "500" ] ;  then
-                                                step="50"
+                                            if [ "${epoch_reset}" == "500" ] ;  then
+                                                step="100"
+                                            elif [ "${epoch_reset}" == "1000" ] ;  then
+                                                step="200"
                                             fi
                                             for data_from in "pancancer" ; do #"mcfarland", "science"
                                                 for type_split in "random" ; do #"leave-one-cell-line-out" "leave-one-tumour-out"

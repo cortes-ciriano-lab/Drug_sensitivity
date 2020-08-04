@@ -38,10 +38,9 @@ def create_report(filename, list_comments):
 
 # --------------------------------------------------
 
-def make_correlation_plot(real_data, predicted_data, indexes, type_data):
+def make_correlation_plot(real_data, predicted_data, type_data):
     d = {'Real_data' : real_data, 'Predicted_data' : predicted_data}
     data = pd.DataFrame.from_dict(d)
-    data.index = indexes
     
     plt.figure(figsize=(15, 15))
     data.plot(x='Real_data', y='Predicted_data', style=['o'])
@@ -85,6 +84,8 @@ class Drug_sensitivity_single_cell:
         
         self.filename_report = None
 
+        self.ccle2depmap_dict = None
+
     # --------------------------------------------------
 
     def set_parameters(self, list_parameters):
@@ -114,6 +115,7 @@ class Drug_sensitivity_single_cell:
         self.type_of_split = list_parameters[12]
         self.to_test = list_parameters[13]
         self.data_from = list_parameters[14]
+        self.ccle2depmap_dict = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/ccle2depmap_dict.pkl','rb'))
         
         #add information to report
         lines = ['** REPORT - DRUG SENSITIVITY **\n',
@@ -133,40 +135,33 @@ class Drug_sensitivity_single_cell:
 
     # --------------------------------------------------
     
-    def load_datasets(self, prism_matrix, ccle2depmap_dict):
+    def load_datasets(self):
         if self.data_from == 'pancancer':
-            with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_screens_once.txt', 'r') as f:
-                list_screens_prism = f.readlines()
-            list_screens_prism = [x.strip('\n') for x in list_screens_prism]
-            
-            cell_line_barcode_dict = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/cell_line_barcode_dict.pkl', 'rb'))
-            
-                        
+            barcode2indexes = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_new_indexes_5percell_line_once_dict.pkl', 'rb'))
+
+            with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_tumours.txt', 'r') as f:
+                list_tumours = f.readlines()
+
+            barcodes_per_tumour = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/barcodes_per_tumour_dict.pkl', 'rb'))
+
             if self.type_of_split == 'random':
-                barcodes_per_tumour = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/barcodes_per_tumour_dict.pkl', 'rb'))
-                
-                #tumours to use ->  Lung_Cancer and Breast_Cancer
-                list_tumours = ['Lung_Cancer']
+                list_tumours = [x.strip('\n') for x in list_tumours]
+                list_tumours = shuffle(list_tumours)
+                list_tumours = list_tumours[:3]
                 list_barcodes_pancancer = []
                 for i in list_tumours:
                     list_barcodes_pancancer.extend(barcodes_per_tumour[i])
                 
                 list_final_indexes = []
                 for bar in list_barcodes_pancancer:
-                    for screen in list_screens_prism:
-                        if not np.isnan(prism_matrix.loc[ccle2depmap_dict[cell_line_barcode_dict[bar]], screen.split(':::')[0]]):
-                            list_final_indexes.append('{}::{}'.format(bar, screen))
+                    list_final_indexes.extend(barcode2indexes[bar])
                             
-                free_memory = [list_barcodes_pancancer, prism_matrix, list_screens_prism]
+                free_memory = [list_barcodes_pancancer, barcode2indexes, list_tumours]
                 for item in free_memory:
                     del item
                 gc.collect()
                 
                 list_final_indexes = shuffle(list_final_indexes)
-                
-                if len(list_final_indexes) > 50000:
-                    list_final_indexes = list_final_indexes[:50000]
-                
                 
                 train_number = int(self.perc_train * len(list_final_indexes))
                 validation_number = int(self.perc_val * len(list_final_indexes))
@@ -179,64 +174,45 @@ class Drug_sensitivity_single_cell:
                 with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_cell_lines_pancancer.txt', 'r') as f:
                     list_cell_lines = f.readlines()
                 list_cell_lines.remove(self.to_test)
-                
-                cell_line_barcode = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/pkl_files/cell_line_barcode_dict.pkl', 'rb'))
+
+                barcodes_per_cell_line = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/barcodes_per_cell_line_dict.pkl', 'rb'))
                 
                 train_cells = list_cell_lines[:-1]
                 validation_cell = list_cell_lines[-1]
-                
-                del cell_line_barcode
-                gc.collect()
-                
+
                 train_set = []
                 validation_set = []
                 test_set = []
-                for i in range(len(list_new_indexes)):
-                    barcode = list_new_indexes[i].strip('\n').split('::')[0]
-                    cell_line = cell_line_barcode[barcode]
-                    if cell_line in train_cells:
-                        train_set.append(list_new_indexes[i])
-                    elif cell_line in validation_cell:
-                        validation_set.append(list_new_indexes[i])
-                    elif cell_line == self.to_test:
-                        test_set.append(list_new_indexes[i])
-                        
-                free_memory = [train_cells, validation_cells, cell_line_barcode]
-                for item in free_memory:
-                    del item
-                gc.collect()
-                    
+                for i in range(len(train_cells)):
+                    barcodes = barcodes_per_cell_line[train_cells[i]]
+                    for bar in barcodes:
+                        train_set.extend(barcode2indexes[bar])
+                barcodes = barcodes_per_cell_line[validation_cell[0]]
+                for bar in barcodes:
+                    validation_set.extend(barcode2indexes[bar])
+                barcodes = barcodes_per_cell_line[self.to_test]
+                for bar in barcodes:
+                    test_set.extend(barcode2indexes[bar])
 
             elif self.type_of_split == 'leave-one-tumour-out':
-                with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_tumours.txt', 'r') as f:
-                    list_tumours = f.readlines()
                 list_tumours.remove(self.to_test)
-                
-                metadata_single = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/pkl_files/pancancer_metadata.pkl', 'wb'))
-                
+
                 train_tumours = list_tumours[:-1]
                 validation_tumour = list_tumours[-1]
                 
-                del list_tumours
-                gc.collect()
-                
                 train_set = []
                 validation_set = []
                 test_set = []
-                for i in range(len(list_new_indexes)):
-                    barcode = list_new_indexes[i].strip('\n').split('::')[0]
-                    tumour = metadata_single.loc[barcode, 'Cancer_type']
-                    if tumour in train_tumours:
-                        train_set.append(list_new_indexes[i])
-                    elif tumour in validation_tumour:
-                        validation_set.append(list_new_indexes[i])
-                    elif tumour == self.to_test:
-                        test_set.append(list_new_indexes[i])
-                
-                free_memory = [metadata_single, train_tumours, validation_tumour]
-                for item in free_memory:
-                    del item
-                gc.collect()
+                for i in range(len(train_tumours)):
+                    barcodes = barcodes_per_tumour[train_tumours[i]]
+                    for bar in barcodes:
+                        train_set.extend(barcode2indexes[bar])
+                barcodes = barcodes_per_tumour[validation_tumour[0]]
+                for bar in barcodes:
+                    validation_set.extend(barcode2indexes[bar])
+                barcodes = barcodes_per_tumour[self.to_test]
+                for bar in barcodes:
+                    test_set.extend(barcode2indexes[bar])
         
         pickle.dump(train_set, open('pickle/train_set_index.pkl', 'wb'))
         pickle.dump(validation_set, open('pickle/validation_set_index.pkl', 'wb'))
@@ -250,6 +226,58 @@ class Drug_sensitivity_single_cell:
         create_report(self.filename_report, lines)
             
         return train_set, validation_set, test_set
+
+    # --------------------------------------------------
+
+    def __load_batch(self, sc_bottlenecks, sc_metadata, prism_bottlenecks, prism_values, type_data, list_index, epoch):
+        dataset = {}
+        dataset_sensitivity = []
+        dataset_total = []
+        for i in list_index:
+            new_i = i.strip('\n').split('::')
+            index = [new_i[0], '::'.join(new_i[1:])]
+            if ':::' in index[1]:
+                screen = index[1].split(':::')[0]
+            else:
+                screen = index[1]
+            new_index = i.strip('\n')
+            data = list(sc_bottlenecks.loc[index[0]].iloc[:-1])
+            cell_line_dep_map = self.ccle2depmap_dict[sc_bottlenecks.loc[index[0]].iloc[-1]]
+            data.extend(list(prism_bottlenecks.loc[index[1]]))
+            dataset_sensitivity.append(prism_values.loc[cell_line_dep_map, screen])
+            dataset[new_index] = np.array(data)
+            dataset_total.append('{},{},{},{},{},{}'.format(new_index, index[0], sc_metadata.loc[index[0], 'Cell_line'], screen, prism_values.loc[cell_line_dep_map, screen]))
+
+        if epoch == 0:
+            with open('pickle/{}_set_real_values.txt'.format(type_data), 'a') as f:
+                f.write('\n'.join(['{:f}'.format(x) for x in dataset_sensitivity]))
+                f.write('\n')
+            with open('pickle/{}_set_total.txt'.format(type_data), 'a') as f:
+                f.write('\n'.join(dataset_total))
+                f.write('\n')
+
+        dataset = torch.tensor(list(dataset.values())).type('torch.FloatTensor')
+        dataset_sensitivity = np.array([[x] for x in dataset_sensitivity])
+        dataset_sensitivity = torch.tensor(dataset_sensitivity).type('torch.FloatTensor')
+        return dataset, dataset_sensitivity
+
+    # --------------------------------------------------
+
+    def save_dataset(self, type_data):
+        with open('pickle/{}_set_total.txt'.format(type_data), 'r') as f:
+            data = f.readlines()
+        with open('pickle/{}_output.txt'.format(type_data), 'r') as f:
+            output = f.readlines()
+
+        if len(data) != len(output):
+            print('Error!! \n{}_set: \nData - {} ; Output - {}'.format(type_data, len(data), len(output)))
+            exit()
+
+        for i in range(len(data)):
+            data[i] = '{},{}'.format(data[i], output[i])
+
+        with open('pickle/{}_set_total.txt'.format(type_data), 'w') as f:
+            f.write('\n'.join(data))
 
     # --------------------------------------------------
 
@@ -286,7 +314,7 @@ class Drug_sensitivity_single_cell:
 
     # --------------------------------------------------
 
-    def __train_validation_nnet(self, model, train_set, validation_set):
+    def __train_validation_nnet(self, model, train_indexes, validation_indexes, sc_bottlenecks, sc_metadata, prism_bottlenecks, prism_values):
         
         dict_optimisers = {'adagrad':optim.Adagrad(model.parameters(), lr=self.learning_rate),
                    'adam':optim.Adam(model.parameters(), lr=self.learning_rate),
@@ -298,14 +326,6 @@ class Drug_sensitivity_single_cell:
                    'rmsprop':optim.RMSprop(model.parameters(), lr=self.learning_rate),
                    'rprop':optim.Rprop(model.parameters(), lr=self.learning_rate),
                    'sgd':optim.SGD(model.parameters(), lr=self.learning_rate)}
-        # 
-        train_loader = torch.utils.data.DataLoader(train_set, batch_size=self.size_batch, shuffle=False)
-        validation_loader = torch.utils.data.DataLoader(validation_set, batch_size=self.size_batch, shuffle=False)
-        
-        free_memory = [train_set, validation_set]
-        for item in free_memory:
-            del item
-        gc.collect()
 
         epoch_stop = int(1.5 * self.epoch_reset)
         got_better = False
@@ -341,20 +361,23 @@ class Drug_sensitivity_single_cell:
             start_train_time = time.time()
             train_predictions_complete = []
             model.train()  # set model for training
-            for i, data in enumerate(train_loader):
-                inputs, real_values = data
+            batches = 0
+            for i in range(0, len(train_indexes), self.size_batch):
+                list_indexes = train_indexes[i:i+self.size_batch]
+                inputs, real_values = self.__load_batch(sc_bottlenecks, sc_metadata, prism_bottlenecks, prism_values, 'Train', list_indexes, epoch)
                 inputs = inputs.to(self.device)
                 real_values = real_values.to(self.device)
                 optimizer.zero_grad()  # set the gradients of all parameters to zero
                 train_predictions = model(inputs)  # output predicted by the model
                 train_current_loss = self.__loss_function(real_values, train_predictions)
                 train_current_loss.backward()  # backpropagation
-                # torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
                 optimizer.step()
                 train_predictions_complete.extend(train_predictions.detach().cpu().numpy().tolist())
                 train_loss_epoch += train_current_loss.item()
+                batches += 1
             
-            train_loss_epoch = train_loss_epoch / len(train_loader)
+            train_loss_epoch = train_loss_epoch / batches
             end_train_model = time.time()
             loss_values_training[epoch] = train_loss_epoch
             times_training[epoch] = end_train_model - start_train_time
@@ -364,16 +387,19 @@ class Drug_sensitivity_single_cell:
             model.eval()
             validation_predictions_complete = []
             with torch.no_grad():
-                for i, data in enumerate(validation_loader):
-                    inputs, real_values = data
+                batches = 0
+                for i in range(0, len(validation_indexes), self.size_batch):
+                    list_indexes = validation_indexes[i:i + self.size_batch]
+                    inputs, real_values = self.__load_batch(sc_bottlenecks, sc_metadata, prism_bottlenecks, prism_values, 'Validation', list_indexes, epoch)
                     inputs = inputs.to(self.device)
                     real_values = real_values.to(self.device)
                     validation_predictions = model(inputs)  # output predicted by the model
                     validation_current_loss = self.__loss_function(real_values, validation_predictions)
                     validation_loss_epoch += validation_current_loss.item()
                     validation_predictions_complete.extend(validation_predictions.cpu().numpy().tolist())
+                    batches += 1
             
-            validation_loss_epoch = validation_loss_epoch / len(validation_loader)
+            validation_loss_epoch = validation_loss_epoch / batches
             end_validation_time = time.time()
             loss_values_validation[epoch] = validation_loss_epoch 
             times_validation[epoch] = end_validation_time - start_validation_time
@@ -381,9 +407,9 @@ class Drug_sensitivity_single_cell:
             if epoch == 0 or validation_loss_epoch < best_loss[1]:  # means that this model is best one yet
                 best_loss = (train_loss_epoch, validation_loss_epoch)
                 best_model = copy.deepcopy(model.state_dict())
-                with open('pickle/validation_output.txt', 'w') as f:
+                with open('pickle/Validation_output.txt', 'w') as f:
                     f.write('\n'.join(['{:f}'.format(x[0]) for x in validation_predictions_complete]))
-                with open('pickle/train_output.txt', 'w') as f:
+                with open('pickle/Train_output.txt', 'w') as f:
                     f.write('\n'.join(['{:f}'.format(x[0]) for x in train_predictions_complete]))
                 got_better = True
                 n_epochs_not_getting_better = 0
@@ -391,9 +417,6 @@ class Drug_sensitivity_single_cell:
             else:
                 got_better = False
                 n_epochs_not_getting_better += 1
-                # if n_epochs_not_getting_better == 10:
-                #     create_report(['Stopped!'], self.filename_report)
-                #     exit()
 
             if (epoch + 1) % 200 == 0:
                 model_parameters = copy.deepcopy(model.state_dict())
@@ -428,11 +451,6 @@ class Drug_sensitivity_single_cell:
                 
                 del results
                 gc.collect()
-
-        free_memory = [train_loader, validation_loader]
-        for item in free_memory:
-            del item
-        gc.collect()
 
         # Saving the results
         results = pd.DataFrame.from_dict((loss_values_training, loss_values_validation, learning_rates, times_training, times_validation)).T
@@ -470,12 +488,12 @@ class Drug_sensitivity_single_cell:
 
     # --------------------------------------------------
 
-    def train_model(self, model, train_set, validation_set):
+    def train_model(self, model, train_indexes, validation_indexes, sc_bottlenecks, sc_metadata, prism_bottlenecks, prism_values):
         start_training = time.time()
         if self.model_architecture == 'NNet':
-            model = self.__train_validation_nnet(model, train_set, validation_set)
-        else:
-            model = self.__train_validation_rf(model, train_set)
+            model = self.__train_validation_nnet(model, train_indexes, validation_indexes, sc_bottlenecks, sc_metadata, prism_bottlenecks, prism_values)
+        # else:
+        #     model = self.__train_validation_rf(model, train_set)
         end_training = time.time()
         create_report(self.filename_report, ['Duration: {:.2f} \n'.format(end_training - start_training)])
         self.__save_model(model)
@@ -511,28 +529,30 @@ class Drug_sensitivity_single_cell:
     
     # --------------------------------------------------
 
-    def __run_test_set_nnet(self, model, test_set):
-        test_loader = torch.utils.data.DataLoader(test_set, batch_size=self.size_batch, shuffle=False)
+    def __run_test_set_nnet(self, model, test_indexes, sc_bottlenecks, sc_metadata, prism_bottlenecks, prism_values):
         test_loss = 0.0
         test_predictions_complete = []
         model.eval()
         with torch.no_grad():
-            for i, data in enumerate(test_loader, 0):
-                inputs, real_values = data
+            batches = 0
+            for i in range(0, len(test_indexes), self.size_batch):
+                list_indexes = test_indexes[i:i + self.size_batch]
+                inputs, real_values = self.__load_batch(sc_bottlenecks, sc_metadata, prism_bottlenecks, prism_values, 'Test', list_indexes, 0)
                 inputs = inputs.to(self.device)
                 real_values = real_values.to(self.device)
                 test_predictions = model(inputs)  # output predicted by the model
                 current_loss = self.__loss_function(real_values, test_predictions)
                 test_loss += current_loss.item()
                 test_predictions_complete.extend(test_predictions.cpu().numpy().tolist())
+                batches += 1
         
-        loss = test_loss / len(test_loader)
+        loss = test_loss / batches
         
         print('Test loss: {:.2f} \n'.format(loss))
         create_report(self.filename_report, ['Testing loss: {:.2f}'.format(loss)])
-        with open('pickle/test_output.txt', 'w') as f:
+        with open('pickle/Test_output.txt', 'w') as f:
             f.write('\n'.join(['{:f}'.format(x[0]) for x in test_predictions_complete]))
-        return test_predictions_complete
+        # return test_predictions_complete
     
     # --------------------------------------------------
     
@@ -561,17 +581,15 @@ class Drug_sensitivity_single_cell:
                  '\n']
         create_report(self.filename_report, lines)
         
-        return y_pred.tolist()
+        # return y_pred.tolist()
     
     # --------------------------------------------------
 
-    def run_test_set(self, model, test_set):
+    def run_test_set(self, model, test_indexes, sc_bottlenecks, sc_metadata, prism_bottlenecks, prism_values):
         if self.model_architecture == 'NNet':
-            output = self.__run_test_set_nnet(model, test_set)
-        else:
-            output = self.__run_test_set_rf(model, test_set)
-
-        return output
+            self.__run_test_set_nnet(model, test_indexes, sc_bottlenecks, sc_metadata, prism_bottlenecks, prism_values)
+        # else:
+        #     self.__run_test_set_rf(model, test_set)
 
     # --------------------------------------------------
 
@@ -637,204 +655,46 @@ def run_drug_prediction(list_parameters):
     pancancer_metadata = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/pkl_files/pancancer_metadata.pkl', 'rb'))
     prism_bottlenecks = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/molecular/run_once/pkl_files/prism_bottlenecks.pkl', 'rb'))
     prism_dataset = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/pkl_files/prism_dataset.pkl', 'rb'))
-    ccle2depmap_dict = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/ccle2depmap_dict.pkl', 'rb'))
-    
+
     #filename for the reports
     filename = drug_sens.create_filename(list_parameters)
     drug_sens.set_parameters(list_parameters)
     model_architecture = drug_sens.get_model_architecture()
     
     #load and process the datasets
-    train_set_index, validation_set_index, test_set_index = drug_sens.load_datasets(prism_dataset, ccle2depmap_dict)
-    
-    #Training set
-    train_set = {}
-    train_set_sensitivity = []
-    train_set_total = {}
-    train_set_gene = {}
-    for i in train_set_index:
-        new_i = i.strip('\n').split('::')
-        index = [new_i[0], '::'.join(new_i[1:])]
-        if ':::' in index[1]:
-            screen = index[1].split(':::')[0]
-        else:
-            screen = index[1]
-        new_index = i.strip('\n')
-        data = list(pancancer_bottlenecks.loc[index[0]].iloc[:-1])
-        cell_line_dep_map = ccle2depmap_dict[pancancer_bottlenecks.loc[index[0]].iloc[-1]]
-        data.extend(list(prism_bottlenecks.loc[index[1]]))
-        train_set_sensitivity.append(prism_dataset.loc[cell_line_dep_map, screen])
-        train_set[new_index] = np.array(data)
-        train_set_total[new_index] = [index[0], pancancer_metadata.loc[index[0], 'Cell_line'],
-                            screen, prism_dataset.loc[cell_line_dep_map, screen]]
-        train_set_gene[new_index] = np.array(list(pancancer_bottlenecks.loc[index[0]].iloc[:-1]))
-    
-    train_set_index = list(train_set.keys())
-    with open('pickle/train_set_real_values.txt', 'w') as f:
-        f.write('\n'.join(['{:f}'.format(x) for x in train_set_sensitivity]))
+    train_set_index, validation_set_index, test_set_index = drug_sens.load_datasets()
+
+    #initialise the dataset files
     if model_architecture == 'NNet':
-        train_set = torch.tensor(list(train_set.values())).type('torch.FloatTensor')
-        train_set_sensitivity = np.array([[x] for x in train_set_sensitivity])
-        train_set_sensitivity = torch.tensor(train_set_sensitivity).type('torch.FloatTensor')
-        train_data = TensorDataset(train_set, train_set_sensitivity)
+        type_data = ['Train', 'Validation', 'Test']
     else:
-        train_set_sensitivity = np.array(train_set_sensitivity)
-        train_set = pd.DataFrame.from_dict(train_set, orient='index')
-        train_data = (train_set, train_set_sensitivity, train_set_index)    
+        type_data = ['Train', 'Test']
+
+    columns = ['index', 'sc_barcode', 'cell_line', 'screen_id', 'real_sensitivity', 'predicted_sensitivity']
+    for i in range(len(type_data)):
+        with open('pickle/{}_set_total.txt'.format(type_data[i]), 'w') as f:
+            f.write(','.join(columns))
     
     #start the Drug Sensitivity model
     if model_architecture == 'NNet':
-        model = drug_sens.initialize_model(size_input=train_set.shape[1])
+        model = drug_sens.initialize_model(size_input=int(int(pancancer_bottlenecks.shape[1]) + int(prism_bottlenecks.shape[1])))
     else:
         model = drug_sens.initialize_model(size_input=[])
     
-    free_memory = [train_set, train_set_sensitivity]
-    for item in free_memory:
-        del item
-    gc.collect()
-    
-    #Validation set
-    if model_architecture == 'NNet':
-        validation_set = {}
-        validation_set_sensitivity = []
-        validation_set_total = {}
-        validation_set_gene = {}
-        for i in validation_set_index:
-            new_i = i.strip('\n').split('::')
-            index = [new_i[0], '::'.join(new_i[1:])]
-            if ':::' in index[1]:
-                screen = index[1].split(':::')[0]
-            else:
-                screen = index[1]
-            new_index = i.strip('\n')
-            data = list(pancancer_bottlenecks.loc[index[0]].iloc[:-1])
-            cell_line_dep_map = ccle2depmap_dict[pancancer_bottlenecks.loc[index[0]].iloc[-1]]
-            data.extend(list(prism_bottlenecks.loc[index[1]]))
-            validation_set_sensitivity.append(prism_dataset.loc[cell_line_dep_map, screen])
-            validation_set[new_index] = np.array(data)
-            validation_set_total[new_index] = [index[0], pancancer_metadata.loc[index[0], 'Cell_line'],
-                            screen, prism_dataset.loc[cell_line_dep_map, screen]]
-            validation_set_gene[new_index] = np.array(list(pancancer_bottlenecks.loc[index[0]].iloc[:-1]))
-        
-        validation_set_index = list(validation_set.keys())
-        with open('pickle/validation_set_real_values.txt', 'w') as f:
-            f.write('\n'.join(['{:f}'.format(x) for x in validation_set_sensitivity]))
-        validation_set = torch.tensor(list(validation_set.values())).type('torch.FloatTensor')
-        validation_set_sensitivity = np.array([[x] for x in validation_set_sensitivity])
-        validation_set_sensitivity =  torch.tensor(validation_set_sensitivity).type('torch.FloatTensor')
-        validation_data = TensorDataset(validation_set, validation_set_sensitivity)
-        
-        free_memory = [validation_set, validation_set_sensitivity]
-        for item in free_memory:
-            del item
-        gc.collect()
-    else:
-        validation_data = []
-    
     #train the model
-    model_trained = drug_sens.train_model(model, train_data, validation_data)
+    model_trained = drug_sens.train_model(model, train_set_index, validation_set_index, pancancer_bottlenecks,
+                                          pancancer_metadata, prism_bottlenecks, prism_dataset)
     
-    if model_architecture == 'NNEt':
-        with open('pickle/validation_output.txt', 'r') as f:
-            validation_output = f.readlines()
-        validation_output = [x.strip('\n') for x in validation_output]
-        for i in range(len(validation_output)):
-            index = validation_set_index[i]
-            value = validation_output[i]
-            validation_set_total[index].append(value)
-        validation_set_total = pd.DataFrame.from_dict(validation_set_total, orient='index', columns = ['barcode', 'Cell_line', 'Screen_id', 'Real_sensitivity', 'Predicted_sensitivity'])
-        validation_set_gene = pd.DataFrame.from_dict(validation_set_gene, orient='index')
-        validation_set_total = pd.concat([validation_set_total, validation_set_gene], axis=1)
-        validation_set_total.reset_index().to_csv('validation_set_total.csv', header=True, index=False)
-        free_memory = [validation_output, validation_set_gene, validation_set_total]
-        for item in free_memory:
-            del item
-        gc.collect()
-
-    with open('pickle/train_output.txt', 'r') as f:
-        train_output = f.readlines()
-    train_output = [x.strip('\n') for x in train_output]
-    for i in range(len(train_output)):
-        index = train_set_index[i]
-        value = train_output[i]
-        train_set_total[index].append(value)
-    train_set_total = pd.DataFrame.from_dict(train_set_total, orient='index', columns = ['barcode', 'Cell_line', 'Screen_id', 'Real_sensitivity', 'Predicted_sensitivity'])
-    train_set_gene = pd.DataFrame.from_dict(train_set_gene, orient='index')
-    train_set_total = pd.concat([train_set_total, train_set_gene], axis=1)
-    train_set_total.reset_index().to_csv('train_set_total.csv', header=True, index=False)
-    free_memory = [train_output, train_set_gene, train_set_total]
-    for item in free_memory:
-        del item
-    gc.collect()
-    
-    
-    #Test set
-    test_set = {}
-    test_set_sensitivity = []
-    test_set_total = {}
-    test_set_gene = {}
-    for i in test_set_index:
-        new_i = i.strip('\n').split('::')
-        index = [new_i[0], '::'.join(new_i[1:])]
-        if ':::' in index[1]:
-            screen = index[1].split(':::')[0]
-        else:
-            screen = index[1]
-        new_index = i.strip('\n')
-        data = list(pancancer_bottlenecks.loc[index[0]].iloc[:-1])
-        cell_line_dep_map = ccle2depmap_dict[pancancer_bottlenecks.loc[index[0]].iloc[-1]]
-        data.extend(list(prism_bottlenecks.loc[index[1]]))
-        test_set_sensitivity.append(prism_dataset.loc[cell_line_dep_map, screen])
-        test_set[new_index] = np.array(data)
-        test_set_total[new_index] = [index[0], pancancer_metadata.loc[index[0], 'Cell_line'],
-                            screen, prism_dataset.loc[cell_line_dep_map, screen]]
-        test_set_gene[new_index] = np.array(list(pancancer_bottlenecks.loc[index[0]].iloc[:-1]))
-    
-    
-    free_memory = [prism_dataset, pancancer_bottlenecks, prism_bottlenecks, ccle2depmap_dict]
-    for item in free_memory:
-        del item
-    gc.collect()
-
-    test_set_index = list(test_set.keys())
-    with open('pickle/test_set_real_values.txt', 'w') as f:
-        f.write('\n'.join(['{:f}'.format(x) for x in test_set_sensitivity]))
-    if model_architecture == 'NNet':
-        test_set = torch.tensor(list(test_set.values())).type('torch.FloatTensor')
-        test_set_sensitivity = np.array([[x] for x in test_set_sensitivity])
-        test_set_sensitivity = torch.tensor(test_set_sensitivity).type('torch.FloatTensor')
-        test_data = TensorDataset(test_set, test_set_sensitivity)
-    else:
-        test_set = pd.DataFrame.from_dict(test_set, orient='index')
-        test_set_sensitivity = np.array(test_set_sensitivity)
-        test_data = (test_set, test_set_sensitivity, test_set_index)
-    
-    del test_set
-    gc.collect()
-    
-    test_output = drug_sens.run_test_set(model_trained, test_data)
-    # test_output = [x[0] for x in test_output]
+    drug_sens.run_test_set(model_trained, test_set_index, pancancer_bottlenecks,
+                                          pancancer_metadata, prism_bottlenecks, prism_dataset)
         
-    free_memory = [model_trained, test_data]
-    for item in free_memory:
-        del item
+    del model_trained
     gc.collect()
-    
-    for i in range(len(test_output)):
-        index = test_set_index[i]
-        value = test_output[i]
-        test_set_total[index].append(value)
-    
-    test_set_total = pd.DataFrame.from_dict(test_set_total, orient='index', columns = ['barcode', 'Cell_line', 'Screen_id', 'Real_sensitivity', 'Predicted_sensitivity'])
-    test_set_gene = pd.DataFrame.from_dict(test_set_gene, orient='index')
-    test_set_total = pd.concat([test_set_total, test_set_gene], axis=1)
-    test_set_total.reset_index().to_csv('test_set_total.csv', header=True, index=False)
-    
-    free_memory = [test_set_gene, test_set_total]
-    for item in free_memory:
-        del item
-    gc.collect()
-    
+
+    #add the predicted values to the final dataset
+    for i in range(len(type_data)):
+        drug_sens.save_dataset(type_data[i])
+
     #plots
     if model_architecture == 'NNet':
         results = pd.read_csv('Training_Validation_results.txt', header = 0, index_col = 0)
@@ -850,72 +710,32 @@ def run_drug_prediction(list_parameters):
         gc.collect()
     
     #correlation matrices
-    with open('pickle/train_output.txt', 'r') as f:
-        train_predictions = f.readlines()
-    with open('pickle/train_set_real_values.txt', 'r') as f:
-        train_set_sensitivity = f.readlines()
-    train_predictions = np.array([float(x.strip('\n')) for x in train_predictions])
-    train_set_sensitivity = np.array([float(x.strip('\n')) for x in train_set_sensitivity])
-    lines = ['\nTraining real values max: {:.2f}'.format(train_set_sensitivity.max()),
-             'Training real values min: {:.2f}'.format(train_set_sensitivity.min()),
-             'Training predicted values max: {:.2f}'.format(train_predictions.max()),
-             'Training predicted values min: {:.2f}'.format(train_predictions.min()),
-             '\n']
-    create_report(filename, lines)
-    corr_value, _ = pearsonr(train_set_sensitivity, train_predictions)
-    make_correlation_plot(train_set_sensitivity, train_predictions, train_set_index, 'Training_set')
-    lines = ['Training correlation: {}'.format(corr_value),
-             '\n']
-    create_report(filename, lines)
-    free_memory = [train_predictions, train_set_sensitivity, train_set_index, corr_value, lines]
-    for item in free_memory:
-        del item
-    gc.collect()
-    
-    if model_architecture == 'NNet':
-        with open('pickle/validation_output.txt', 'r') as f:
-            validation_predictions = f.readlines()
-        with open('pickle/validation_set_real_values.txt', 'r') as f:
-            validation_set_sensitivity = f.readlines()
-        validation_predictions = np.array([float(x.strip('\n')) for x in validation_predictions])
-        validation_set_sensitivity = np.array([float(x.strip('\n')) for x in validation_set_sensitivity])
-        lines = ['\nValidation real values max: {:.2f}'.format(validation_set_sensitivity.max()),
-                 'Validation real values min: {:.2f}'.format(validation_set_sensitivity.min()),
-                 'Validation predicted values max: {:.2f}'.format(validation_predictions.max()),
-                 'Validation predicted values min: {:.2f}'.format(validation_predictions.min()),
-                 '\n']
+    for i in range(len(type_data)):
+        with open('pickle/{}_output.txt'.format(type_data[i]), 'r') as f:
+            predictions = f.readlines()
+        with open('pickle/{}_set_real_values.txt'.format(type_data[i]), 'r') as f:
+            real_values = f.readlines()
+        predictions = np.array([float(x.strip('\n')) for x in predictions])
+        real_values = np.array([float(x.strip('\n')) for x in real_values])
+        if type_data[i] == 'Validation':
+            plot_name = '{}_set'.format(type_data[i])
+            lines = ['\n{} real values max: {:.2f}'.format(type_data[i], predictions.max()),
+                     '{} real values min: {:.2f}'.format(type_data[i], predictions.min()),
+                     '{} predicted values max: {:.2f}'.format(type_data[i], predictions.max()),
+                     '{} predicted values min: {:.2f}'.format(type_data[i], predictions.min())]
+        else:
+            plot_name = '{}ing_set'.format(type_data[i])
+            lines = ['\n{}ing real values max: {:.2f}'.format(type_data[i], real_values.max()),
+                     '{}ing real values min: {:.2f}'.format(type_data[i], real_values.min()),
+                     '{}ing predicted values max: {:.2f}'.format(type_data[i], predictions.max()),
+                     '{}ing predicted values min: {:.2f}'.format(type_data[i], predictions.min())]
+        corr_value, _ = pearsonr(real_values, predictions)
+        make_correlation_plot(real_values, predictions, plot_name)
+        if type_data[i] == 'Validation':
+            lines.extend(['\n{} correlation: {}'.format(type_data[i], corr_value), '\n'])
+        else:
+            lines.extend(['\n{}ing correlation: {}'.format(type_data[i], corr_value), '\n'])
         create_report(filename, lines)
-        corr_value, _ = pearsonr(validation_set_sensitivity, validation_predictions)
-        make_correlation_plot(validation_set_sensitivity, validation_predictions, validation_set_index, 'Validation_set')
-        lines = ['Validation correlation: {}'.format(corr_value),
-                 '\n']
-        create_report(filename, lines)
-        
-        free_memory = [validation_predictions, validation_set_sensitivity, validation_set_index, corr_value, lines]
-        for item in free_memory:
-            del item
-        gc.collect()
-    
-    # test_output = [x.strip('\n') for x in test_output]
-    test_set_sensitivity = np.array([x.numpy().tolist()[0] for x in test_set_sensitivity])
-    test_output = np.array([x[0] for x in test_output])
-    lines = ['\nTesting real values max: {:.2f}'.format(test_set_sensitivity.max()),
-             'Testing real values min: {:.2f}'.format(test_set_sensitivity.min()),
-             'Testing predicted values max: {:.2f}'.format(test_output.max()),
-             'Testing predicted values min: {:.2f}'.format(test_output.min()),
-             '\n']
-    create_report(filename, lines)
-    corr_value, _ = pearsonr(test_set_sensitivity, test_output)
-    make_correlation_plot(test_set_sensitivity, test_output, test_set_index, 'Test_set')
-    lines = ['Testing correlation: {}'.format(corr_value),
-             '\n']
-    create_report(filename, lines)
-    
-    free_memory = [test_output, test_set_sensitivity, test_set_index]
-    for item in free_memory:
-        del item
-    gc.collect()
-    
     
     end_run = time.time()
     create_report(filename, ['\nTime for run: {:.2f}'.format(end_run - start_run)])
