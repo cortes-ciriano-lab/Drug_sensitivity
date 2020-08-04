@@ -1,6 +1,7 @@
 #!/bin/bash
 
 rm e.log o.log invalid_smiles.txt
+rm -r data
 #rm -r data/molecular/run_500/ data/molecular/run_10000/
 
 mkdir -p data/
