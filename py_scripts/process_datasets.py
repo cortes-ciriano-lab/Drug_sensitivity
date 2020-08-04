@@ -180,7 +180,7 @@ class Process_dataset_pancancer():
                     if not np.isnan(sensitivity_values.loc[cell_line_dep_map, screen.split(':::')[0]]):
                         list_indexes.append('{}::{}'.format(bar, screen))
                 new_indexes[bar] = list_indexes
-        pickle.dump(new_indexes, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_new_indexes_5percell_line_{}.txt'.format(what_type), 'rb'))
+        pickle.dump(new_indexes, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_new_indexes_5percell_line_{}_dict.pkl'.format(what_type), 'wb'))
         
         print(total)
         
