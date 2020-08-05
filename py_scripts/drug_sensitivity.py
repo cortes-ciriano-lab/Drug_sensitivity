@@ -85,6 +85,8 @@ class Drug_sensitivity_single_cell:
         self.filename_report = None
 
         self.ccle2depmap_dict = None
+        
+        self.dataset_index_dict = {}
 
     # --------------------------------------------------
 
@@ -211,9 +213,25 @@ class Drug_sensitivity_single_cell:
                 for bar in barcodes:
                     test_set.extend(barcode2indexes[bar])
         
-        pickle.dump(train_set, open('pickle/train_set_index.pkl', 'wb'))
-        pickle.dump(validation_set, open('pickle/validation_set_index.pkl', 'wb'))
-        pickle.dump(test_set, open('pickle/test_set_index.pkl', 'wb'))
+        
+        train_set_dict = {x : [] for x in train_set}
+        validation_set_dict = {x : [] for x in validation_set}
+        test_set_dict = {x : [] for x in test_set}
+        
+        datasets = [train_set_dict, validation_set_dict, test_set_dict]
+        for data in datasets:
+            for k in data.keys():
+                temp = k.strip('\n').split('::')
+                temp[1] = '::'.join(temp[1:])
+                data[k] = (temp[0], temp[1])
+        
+        self.dataset_index_dict['Train'] = train_set_dict
+        self.dataset_index_dict['Validation'] = validation_set_dict
+        self.dataset_index_dict['Test'] = test_set_dict
+        
+        pickle.dump(train_set, open('pickle/train_set_index_dict.pkl', 'wb'))
+        pickle.dump(validation_set, open('pickle/validation_set_index_dict.pkl', 'wb'))
+        pickle.dump(test_set, open('pickle/test_set_index_dict.pkl', 'wb'))
         print(len(train_set), len(validation_set), len(test_set))
         lines = ['\n** DATASETS **',
                  'Training set: {}'.format(len(train_set)),
@@ -221,40 +239,36 @@ class Drug_sensitivity_single_cell:
                  'Test set: {}'.format(len(test_set)),
                  '\n']
         create_report(self.filename_report, lines)
-            
         return train_set, validation_set, test_set
 
     # --------------------------------------------------
 
     def __load_batch(self, sc_bottlenecks, sc_metadata, prism_bottlenecks, prism_values, type_data, list_index, epoch):
-        dataset = {}
+        dataset = []
         dataset_sensitivity = []
         dataset_total = []
         for i in list_index:
-            new_i = i.strip('\n').split('::')
-            index = [new_i[0], '::'.join(new_i[1:])]
-            if ':::' in index[1]:
-                screen = index[1].split(':::')[0]
-            else:
-                screen = index[1]
-            new_index = i.strip('\n')
-            data = list(sc_bottlenecks.loc[index[0]].iloc[:-1])
-            cell_line_dep_map = self.ccle2depmap_dict[sc_bottlenecks.loc[index[0]].iloc[-1]]
-            data.extend(list(prism_bottlenecks.loc[index[1]]))
-            dataset_sensitivity.append(prism_values.loc[cell_line_dep_map, screen])
-            dataset[new_index] = np.array(data)
-            dataset_total.append('{},{},{},{},{}'.format(new_index, index[0], sc_metadata.loc[index[0], 'Cell_line'], screen, prism_values.loc[cell_line_dep_map, screen]))
+            barcode, prism_bot_index = self.dataset_index_dict[type_data][i]
+            screen = prism_bot_index.split(':::')[0]
+            data = list(sc_bottlenecks.loc[barcode].iloc[:-1])
+            cell_line_dep_map = self.ccle2depmap_dict[sc_metadata.loc[barcode, 'Cell_line']]
+            data.extend(list(prism_bottlenecks.loc[prism_bot_index]))
+            dataset_sensitivity.append([prism_values.loc[cell_line_dep_map, screen]])
+            dataset.append(np.array(data))
+            if epoch == 0:
+                dataset_total.append('{},{},{},{},{}'.format(i, barcode, sc_metadata.loc[barcode, 'Cell_line'],
+                                                             screen, prism_values.loc[cell_line_dep_map, screen]))
 
         if epoch == 0:
             with open('pickle/{}_set_real_values.txt'.format(type_data), 'a') as f:
-                f.write('\n'.join(['{:f}'.format(x) for x in dataset_sensitivity]))
+                f.write('\n'.join(['{:f}'.format(x[0]) for x in dataset_sensitivity]))
                 f.write('\n')
             with open('pickle/{}_set_total.txt'.format(type_data), 'a') as f:
                 f.write('\n'.join(dataset_total))
                 f.write('\n')
 
-        dataset = torch.tensor(list(dataset.values())).type('torch.FloatTensor')
-        dataset_sensitivity = np.array([[x] for x in dataset_sensitivity])
+        dataset = torch.tensor(dataset).type('torch.FloatTensor')
+        dataset_sensitivity = np.array(dataset_sensitivity)
         dataset_sensitivity = torch.tensor(dataset_sensitivity).type('torch.FloatTensor')
         return dataset, dataset_sensitivity
 
@@ -649,9 +663,13 @@ def run_drug_prediction(list_parameters):
     start_run = time.time()
     drug_sens = Drug_sensitivity_single_cell()
     pancancer_bottlenecks = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/single_cell/pancancer_with_alpha_bottlenecks.pkl', 'rb'))
+    pancancer_bottlenecks = pancancer_bottlenecks.iloc[:,:-1]
+    pancancer_bottlenecks.astype('float32')
     pancancer_metadata = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/pkl_files/pancancer_metadata.pkl', 'rb'))
     prism_bottlenecks = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/molecular/run_once/pkl_files/prism_bottlenecks.pkl', 'rb'))
+    prism_bottlenecks.astype('float32')
     prism_dataset = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/pkl_files/prism_dataset.pkl', 'rb'))
+    prism_dataset.astype('float32')
 
     #filename for the reports
     filename = drug_sens.create_filename(list_parameters)
