@@ -147,21 +147,18 @@ class Drug_sensitivity_single_cell:
             if self.type_of_split == 'random':
                 list_tumours = [x.strip('\n') for x in list_tumours]
                 list_tumours = shuffle(list_tumours)
-                list_tumours = list_tumours[:3]
                 list_barcodes_pancancer = []
-                for i in list_tumours:
-                    list_barcodes_pancancer.extend(barcodes_per_tumour[i])
+                for i in range(4):
+                    tumour = list_tumours[i]
+                    list_barcodes_pancancer.extend(barcodes_per_tumour[tumour])
                 
                 list_final_indexes = []
                 for bar in list_barcodes_pancancer:
-                    list_final_indexes.extend(barcode2indexes[bar])
-                            
-                free_memory = [list_barcodes_pancancer, barcode2indexes, list_tumours]
-                for item in free_memory:
-                    del item
-                gc.collect()
-                
-                list_final_indexes = shuffle(list_final_indexes)
+                    try:
+                        list_final_indexes.extend(barcode2indexes[bar])
+                    except:
+                        pass
+                # list_final_indexes = shuffle(list_final_indexes[:50000])
                 
                 train_number = int(self.perc_train * len(list_final_indexes))
                 validation_number = int(self.perc_val * len(list_final_indexes))
@@ -246,7 +243,7 @@ class Drug_sensitivity_single_cell:
             data.extend(list(prism_bottlenecks.loc[index[1]]))
             dataset_sensitivity.append(prism_values.loc[cell_line_dep_map, screen])
             dataset[new_index] = np.array(data)
-            dataset_total.append('{},{},{},{},{},{}'.format(new_index, index[0], sc_metadata.loc[index[0], 'Cell_line'], screen, prism_values.loc[cell_line_dep_map, screen]))
+            dataset_total.append('{},{},{},{},{}'.format(new_index, index[0], sc_metadata.loc[index[0], 'Cell_line'], screen, prism_values.loc[cell_line_dep_map, screen]))
 
         if epoch == 0:
             with open('pickle/{}_set_real_values.txt'.format(type_data), 'a') as f:
@@ -677,7 +674,7 @@ def run_drug_prediction(list_parameters):
     
     #start the Drug Sensitivity model
     if model_architecture == 'NNet':
-        model = drug_sens.initialize_model(size_input=int(int(pancancer_bottlenecks.shape[1]) + int(prism_bottlenecks.shape[1])))
+        model = drug_sens.initialize_model(size_input=int(int(pancancer_bottlenecks.shape[1]) - 1 + int(prism_bottlenecks.shape[1]))) #in the pancancer dataset the last column has the cell lines
     else:
         model = drug_sens.initialize_model(size_input=[])
     

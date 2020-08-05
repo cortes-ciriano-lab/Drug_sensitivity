@@ -2,23 +2,23 @@
 
 #NNet
 for type_data in "single_cell" ; do #"bulk"
-    for layers in "64_32" "128_64_32" "128_64_32_16" "128_32" ; do
-    	for af in "relu" "rrelu" "elu" "hardtanh" "leakyrelu" "logsigmoid" "relu6" "selu" "celu" "sigmoid" "softplus" "softshrink" "softsign" "tanh" "tanhshrink" "gelu" "hardshrink" "softmin" ; do
-        	for op in "adam" "sgd" "rmsprop" "adagrad" "adamw" "sparseadam" "adamax" "asgd" "lbfgs" "rprop" ; do
+    for layers in "64_32" ; do #"128_64_32" "128_64_32_16" "128_32" ; do
+    	for af in "relu" ; do #"rrelu" "elu" "hardtanh" "leakyrelu" "logsigmoid" "relu6" "selu" "celu" "sigmoid" "softplus" "softshrink" "softsign" "tanh" "tanhshrink" "gelu" "hardshrink" "softmin" ; do
+        	for op in "adam" ; do #"sgd" "rmsprop" "adagrad" "adamw" "sparseadam" "adamax" "asgd" "lbfgs" "rprop" ; do
         		network_info="${layers}_${af}_${op}"
-		        for lr in "0.00001" "0.01" "0.05"  "0.001" "0.1" "0.0001" ; do
+		        for lr in "0.00001" ; do #"0.01" "0.05"  "0.001" "0.1" "0.0001" ; do
 		            for size_batch in "64" ; do
-		                for n_epoch in "10000" ; do
+		                for n_epoch in "10" ; do # "10000"
 		                    perc_train="0.7"
 		                    perc_val="0.15"
-                            for epoch_reset in "1000" ; do
+                            for epoch_reset in "10" ; do # "1000" "500"
                                 for dropout in "0.1"  ; do 
                                     for gam in "0.6" ; do
                                         for seed in "42" ; do
                                             if [ "${epoch_reset}" == "500" ] ;  then
                                                 step="100"
-                                            elif [ "${epoch_reset}" == "1000" ] ;  then
-                                                step="200"
+                                            elif [ "${epoch_reset}" == "10" ] ;  then
+                                                step="2"
                                             fi
                                             for data_from in "pancancer" ; do #"mcfarland", "science"
                                                 for type_split in "random" ; do #"leave-one-cell-line-out" "leave-one-tumour-out"

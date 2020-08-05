@@ -1,7 +1,7 @@
 #!/bin/bash
 rm list_best_parameters_pancancer.txt loss_results_pancancer.txt check_cases.txt
 
-for file in results/single_cell/pancancer/out*
+for file in 5K_results/single_cell/pancancer/out*
 do
     cat ${file} | grep "Training loss" >> loss_results_pancancer.txt #tr -dc '0-9'
     cat ${file} | grep "Validation loss" >> loss_results_pancancer.txt #tr -dc '0-9'
