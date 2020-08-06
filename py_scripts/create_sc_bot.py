@@ -5,9 +5,12 @@ import numpy as np
 import pickle
 import gc
 
-
 from single_cell import Genexp_sc, create_report
 
+# -------------------------------------------------- DEFINE SEEDS --------------------------------------------------
+
+seed = 42
+np.random.seed(seed)
 
 # -------------------------------------------------- PROCESS DATASETS --------------------------------------------------
 def create_pancancer_bottleneck():
@@ -90,8 +93,9 @@ def create_pancancer_bottleneck():
     pickle.dump(gene_bottlenecks, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/single_cell/pancancer_with_alpha_bottlenecks.pkl', 'wb'))
     gene_bottlenecks.reset_index().to_csv('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/single_cell/pancancer_with_alpha_bottlenecks.csv', header=True, index=False)
 
+    gene_bottlenecks.set_index(list(gene_bottlenecks.columns)[0])
     print("PANCANCER BOTTLENECK \n", gene_bottlenecks.shape)
     
-    return list_indexes
+    return gene_bottlenecks, list_indexes
 
 # _ = create_pancancer_bottleneck()

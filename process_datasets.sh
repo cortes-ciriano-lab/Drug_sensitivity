@@ -20,6 +20,8 @@ mkdir -p data/single_cell/pkl_files
 mkdir -p data/single_cell/csv_files
 mkdir -p data/pkl_files/
 mkdir -p data/prism_pancancer
+mkdir -p data/prism_pancancer/csv_files
+mkdir -p data/prism_pancancer/csv_files/once
 
 
 bsub -P gpu -gpu - -M 30G -e e.log -o o.log -J prism_gpu "python /hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/py_scripts/process_datasets.py pancancer"

@@ -19,6 +19,12 @@ import umap
 
 from full_network import AE_gene_expression
 
+# -------------------------------------------------- DEFINE SEEDS --------------------------------------------------
+
+seed = 42
+np.random.seed(seed)
+torch.manual_seed(seed)
+
 # -------------------------------------------------- COLOR PALETTE --------------------------------------------------
 
 color_palette = []
@@ -65,6 +71,11 @@ class Genexp():
       self.seed = list_parameters[10]
       self.perc_train = list_parameters[5]
       self.perc_val = list_parameters[6]
+
+      if seed != self.seed:
+        seed = self.seed
+        np.random.seed(self.seed)
+        torch.manual_seed(self.seed)
 
     # --------------------------------------------------
 
@@ -119,9 +130,6 @@ class Genexp():
     # --------------------------------------------------
 
     def __initialize_model(self, n_genes):
-      np.random.seed(self.seed)
-      torch.manual_seed(self.seed)
-
       if torch.cuda.is_available():
         self.device = 'cuda'
       else:

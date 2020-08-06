@@ -16,6 +16,11 @@ from molecular import check_valid_smiles, Molecular
 from single_cell import Genexp_sc
 from featurizer_SMILES import OneHotFeaturizer
 
+# -------------------------------------------------- DEFINE SEEDS --------------------------------------------------
+
+seed = 42
+np.random.seed(seed)
+
 # -------------------------------------------------- FUNCTIONS --------------------------------------------------
 ohf = OneHotFeaturizer()
 molecules = Molecular()

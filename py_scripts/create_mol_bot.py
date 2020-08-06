@@ -12,6 +12,10 @@ from rdkit.Chem import AllChem
 from molecular import check_valid_smiles, Molecular
 from featurizer_SMILES import OneHotFeaturizer
 
+# -------------------------------------------------- DEFINE SEEDS --------------------------------------------------
+seed = 42
+np.random.seed(seed)
+
 # -------------------------------------------------- PROCESS DATASETS  --------------------------------------------------
 def create_prism_bottleneck_run_once():
     ohf = OneHotFeaturizer()
@@ -152,7 +156,8 @@ def create_prism_bottleneck_only_valids(times):
     pickle.dump(mol_bottlenecks, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/molecular/run_{}/pkl_files/prism_bottlenecks.pkl'.format(times), 'wb'), protocol=4)
     mol_bottlenecks.reset_index().to_csv('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/molecular/run_{}/prism_bottlenecks.csv'.format(times), header=True, index=False)    
 
-    return list_indexes
+    mol_bottlenecks.set_index(list(mol_bottlenecks.columns)[0])
+    return mol_bottlenecks, list_indexes
 
 # _ = create_prism_bottleneck()
 

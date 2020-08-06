@@ -20,6 +20,12 @@ from sklearn.utils import shuffle
 
 from full_network import VAE_gene_expression_single_cell
 
+# -------------------------------------------------- DEFINE SEEDS --------------------------------------------------
+
+seed = 42
+np.random.seed(seed)
+torch.manual_seed(seed)
+
 # -------------------------------------------------- ANOTHER FUNCTIONS --------------------------------------------------
 
 def create_report(filename, list_comments):
@@ -61,6 +67,11 @@ class Genexp_sc():
         self.epoch_reset = int(list_parameters[9])
         self.layers = list_parameters[13]
         self.alpha = float(list_parameters[14])
+
+        if seed != self.seed:
+            seed = self.seed
+            np.random.seed(self.seed)
+            torch.manual_seed(self.seed)
     
     # --------------------------------------------------
         
@@ -81,9 +92,6 @@ class Genexp_sc():
     # --------------------------------------------------
 
     def __initialize_model(self, num_genes):
-        np.random.seed(self.seed)
-        torch.manual_seed(self.seed)
-
         model = VAE_gene_expression_single_cell(dropout_prob=self.dropout, n_genes=num_genes, layers=self.layers)
         model.to(self.device)
         

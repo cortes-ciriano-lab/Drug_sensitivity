@@ -1,6 +1,9 @@
 import pandas as pd
 import numpy as np
 
+seed = 42
+np.random.seed(seed)
+
 files = ["loss_results_pancancer"]
 for f in files:
     print(" ".join(f.upper().split("_")[-2:]))

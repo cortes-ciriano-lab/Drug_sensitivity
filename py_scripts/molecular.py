@@ -20,6 +20,11 @@ from rdkit import Chem
 from full_network import VAE_molecular
 from featurizer_SMILES import OneHotFeaturizer
 
+# -------------------------------------------------- DEFINE SEEDS --------------------------------------------------
+
+seed = 42
+np.random.seed(seed)
+torch.manual_seed(seed)
 
 # -------------------------------------------------- ANOTHER FUNCTIONS --------------------------------------------------
 
@@ -70,6 +75,11 @@ class Molecular():
         self.seed = int(list_parameters[10])
         self.ohf = OneHotFeaturizer()
 
+        if seed != self.seed:
+            seed = self.seed
+            np.random.seed(self.seed)
+            torch.manual_seed(self.seed)
+
     # --------------------------------------------------
 
     def __load_initial_parameters(self):
@@ -91,9 +101,6 @@ class Molecular():
     # --------------------------------------------------
 
     def __initialize_model(self, n_rows, n_columns):
-        np.random.seed(self.seed)
-        torch.manual_seed(self.seed)
-
         model = VAE_molecular(number_channels_in=int(n_rows),
                               length_signal_in=int(n_columns), dropout_prob=self.dropout)
         model.to(self.device)
