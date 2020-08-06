@@ -84,6 +84,7 @@ class Genexp_sc():
 
         create_report(self.filename_report, lines)
 
+        global seed
         if seed != self.seed:
             seed = self.seed
             np.random.seed(self.seed)

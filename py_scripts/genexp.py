@@ -79,6 +79,7 @@ class Genexp():
       self.device = list_parameters[-1]
       self.__set_initial_parameters(list_parameters)
 
+      global seed
       if seed != self.seed:
         seed = self.seed
         np.random.seed(self.seed)

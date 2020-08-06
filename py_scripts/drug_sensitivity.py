@@ -126,6 +126,7 @@ class Drug_sensitivity_single_cell:
         self.data_from = list_parameters[14]
         self.ccle2depmap_dict = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/ccle2depmap_dict.pkl','rb'))
 
+        global seed
         if seed != self.seed:
             seed = self.seed
             np.random.seed(self.seed)
