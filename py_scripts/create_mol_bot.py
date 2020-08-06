@@ -92,7 +92,8 @@ def create_prism_bottleneck_run_once():
     pickle.dump(mol_bottlenecks, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/molecular/run_once/pkl_files/prism_bottlenecks.pkl', 'wb'), protocol=4)
     mol_bottlenecks.reset_index().to_csv('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/molecular/run_once/prism_bottlenecks.csv', header=True, index=False)    
 
-    return list_indexes
+    mol_bottlenecks.set_index(list(mol_bottlenecks.columns)[0])
+    return mol_bottlenecks, list_indexes
 
 def create_prism_bottleneck_only_valids(times):
     ohf = OneHotFeaturizer()

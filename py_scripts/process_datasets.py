@@ -91,7 +91,7 @@ class Process_dataset_pancancer():
                 sep=',', header=0,
                 index_col=0, usecols=['column_name', 'smiles', 'broad_id', 'name', 'dose', 'screen_id', 'moa', 'target'])
         else:
-            
+            pass
 
         print('\n PRISM dataset (after loading)')
         print(prism_matrix.shape)
