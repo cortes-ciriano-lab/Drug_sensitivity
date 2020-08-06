@@ -663,13 +663,9 @@ def run_drug_prediction(list_parameters):
     start_run = time.time()
     drug_sens = Drug_sensitivity_single_cell()
     pancancer_bottlenecks = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/single_cell/pancancer_with_alpha_bottlenecks.pkl', 'rb'))
-    pancancer_bottlenecks = pancancer_bottlenecks.iloc[:,:-1]
-    pancancer_bottlenecks.astype('float32')
     pancancer_metadata = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/pkl_files/pancancer_metadata.pkl', 'rb'))
     prism_bottlenecks = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/molecular/run_once/pkl_files/prism_bottlenecks.pkl', 'rb'))
-    prism_bottlenecks.astype('float32')
     prism_dataset = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/pkl_files/prism_dataset.pkl', 'rb'))
-    prism_dataset.astype('float32')
 
     #filename for the reports
     filename = drug_sens.create_filename(list_parameters)
