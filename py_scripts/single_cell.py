@@ -67,11 +67,6 @@ class Genexp_sc():
         self.epoch_reset = int(list_parameters[9])
         self.layers = list_parameters[13]
         self.alpha = float(list_parameters[14])
-
-        if seed != self.seed:
-            seed = self.seed
-            np.random.seed(self.seed)
-            torch.manual_seed(self.seed)
     
     # --------------------------------------------------
         
@@ -88,6 +83,11 @@ class Genexp_sc():
         lines.extend(["*About the network", "Layers: {}".format(self.layers), "Runs on: {}".format(self.device), "\n"])
 
         create_report(self.filename_report, lines)
+
+        if seed != self.seed:
+            seed = self.seed
+            np.random.seed(self.seed)
+            torch.manual_seed(self.seed)
         
     # --------------------------------------------------
 

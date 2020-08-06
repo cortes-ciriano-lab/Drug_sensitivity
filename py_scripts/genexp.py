@@ -72,17 +72,17 @@ class Genexp():
       self.perc_train = list_parameters[5]
       self.perc_val = list_parameters[6]
 
-      if seed != self.seed:
-        seed = self.seed
-        np.random.seed(self.seed)
-        torch.manual_seed(self.seed)
-
     # --------------------------------------------------
 
     def __load_initial_parameters(self):
       list_parameters = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/trained_models/list_initial_parameters_genexp.pkl', 'rb'))
       self.device = list_parameters[-1]
       self.__set_initial_parameters(list_parameters)
+
+      if seed != self.seed:
+        seed = self.seed
+        np.random.seed(self.seed)
+        torch.manual_seed(self.seed)
 
     # --------------------------------------------------
     

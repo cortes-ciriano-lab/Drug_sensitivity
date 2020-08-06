@@ -75,11 +75,6 @@ class Molecular():
         self.seed = int(list_parameters[10])
         self.ohf = OneHotFeaturizer()
 
-        if seed != self.seed:
-            seed = self.seed
-            np.random.seed(self.seed)
-            torch.manual_seed(self.seed)
-
     # --------------------------------------------------
 
     def __load_initial_parameters(self):
@@ -97,6 +92,11 @@ class Molecular():
                 '\n']
 
         create_report(self.filename_report, lines)
+
+        if seed != self.seed:
+            seed = self.seed
+            np.random.seed(self.seed)
+            torch.manual_seed(self.seed)
 
     # --------------------------------------------------
 
