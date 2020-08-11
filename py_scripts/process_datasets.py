@@ -193,15 +193,17 @@ class Process_dataset_pancancer():
         columns_dataset.extend(['sensitivity_value'])
 
         list_new_indexes = []
+        barcode2indexes = {}
 
         for k,v in self.barcodes_per_cell_line.items():
             new_dataset = {}
             barcodes = shuffle(v)
             barcodes = barcodes[:5]
             for bar in barcodes:
+                indexes = []
                 depmap_id = depmap_per_barcode[bar]
                 for screen in screens_list:
-                    sens_value = prism_dataset.loc[depmap_id, screen.split(':::'[0])]
+                    sens_value = prism_dataset.loc[depmap_id, screen.split(':::')[0]]
                     if not np.isnan(sens_value):
                         new_index = '{}::{}'.format(bar, screen)
                         list_new_indexes.append(new_index)
@@ -209,6 +211,8 @@ class Process_dataset_pancancer():
                         data.extend(list(prism_bottlenecks.loc[screen]))
                         data.append(sens_value)
                         new_dataset[new_index] = np.array(data)
+                        indexes.append(new_index)
+                barcode2indexes[bar] = indexes
             new_dataset = pd.DataFrame.from_dict(new_dataset, orient='index')
             new_dataset.columns = columns_dataset
             new_dataset.index.names = ['combined_index']
@@ -217,6 +221,8 @@ class Process_dataset_pancancer():
                 f.write('\n'.join(list_new_indexes))
                 f.write('\n')
             list_new_indexes = []
+        
+        pickle.dump(barcode2indexes, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_new_indexes_5percell_line_once_dict.pkl', 'wb'))
 
 
     # --------------------------------------------------
