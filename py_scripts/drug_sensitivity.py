@@ -183,7 +183,7 @@ class Drug_sensitivity_single_cell:
                         list_final_indexes.extend(barcode2indexes[bar])
                     except:
                         pass
-                list_final_indexes = shuffle(list_final_indexes[:5000])
+                list_final_indexes = shuffle(list_final_indexes[:5000000])
                 
                 train_number = int(self.perc_train * len(list_final_indexes))
                 validation_number = int(self.perc_val * len(list_final_indexes))
@@ -276,6 +276,9 @@ class Drug_sensitivity_single_cell:
         # with open('pickle/{}_set_real_values.txt'.format(type_data), 'a') as f:
         #     f.write('\n'.join(list(data['sens'].astype(str))))
         #     f.write('\n')
+        with open('pickle/{}_set_real_values.txt'.format(type_data), 'a') as f:
+            f.write('\n'.join([str(x[0]) for x in sensitivity]))
+            f.write('\n')
         # with open('pickle/{}_set_total.txt'.format(type_data), 'a') as f:
         #     f.write(','.join(['index', 'sc_barcode', 'cell_line', 'screen_id', 'real_sensitivity']))
         #     for i in range(len(indexes)):
