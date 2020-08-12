@@ -192,41 +192,31 @@ class Process_dataset_pancancer():
         columns_dataset.extend(['feature_drug_{}'.format(x + 1) for x in range(n_feat_prism)])
         columns_dataset.extend(['sensitivity_value'])
 
-        list_new_indexes = []
+        barcodes_to_use = []
+
+        for k,v in self.barcodes_per_cell_line.items():
+            barcodes = shuffle(v)
+            barcodes_to_use.extend(barcodes[:5])
+
         barcode2indexes = {}
         new_indexes_dict = {}
 
-        for k,v in self.barcodes_per_cell_line.items():
-            new_dataset = {}
-            barcodes = shuffle(v)
-            barcodes = barcodes[:5]
-            for bar in barcodes:
+        for i in range(pancancer_bottlenecks.shape[0]):
+            bar = pancancer_bottlenecks.iloc[i].name
+            if bar in barcodes_to_use:
                 indexes = []
                 depmap_id = depmap_per_barcode[bar]
-                for screen in screens_list:
+                for j in range(prism_bottlenecks.shape[0])
+                    screen = prism_bottlenecks.iloc[i].name
                     sens_value = prism_dataset.loc[depmap_id, screen.split(':::')[0]]
                     if not np.isnan(sens_value):
                         new_index = '{}::{}'.format(bar, screen)
-                        list_new_indexes.append(new_index)
-                        # data = list(pancancer_bottlenecks.loc[bar].iloc[:-1])
-                        # data.extend(list(prism_bottlenecks.loc[screen]))
-                        # data.append(sens_value)
-                        # new_dataset[new_index] = np.array(data)
+                        new_indexes_dict[new_index] = ((bar, i), (screen, j), sens_value)
                         indexes.append(new_index)
-                        new_indexes_dict[new_index] = (bar, screen, sens_value)
                 barcode2indexes[bar] = indexes
-            # new_dataset = pd.DataFrame.from_dict(new_dataset, orient='index')
-            # new_dataset.columns = columns_dataset
-            # new_dataset.index.names = ['combined_index']
-            # new_dataset.reset_index().to_csv('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/csv_files/{}/prism_pancancer_5percell_line_{}.csv'.format(what_type, k), header=True, index=False)
-            with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_new_indexes_5percell_line_{}.txt'.format(what_type), 'a') as f:
-                f.write('\n'.join(list_new_indexes))
-                f.write('\n')
-            list_new_indexes = []
-        
+
         pickle.dump(barcode2indexes, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_new_indexes_5percell_line_once_dict.pkl', 'wb'))
         pickle.dump(new_indexes_dict, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_new_indexes_5percell_line_once_newIndex2barcodeScreen_dict.pkl', 'wb'))
-
 
     # --------------------------------------------------
     
@@ -234,7 +224,7 @@ class Process_dataset_pancancer():
         #initialize the molecular model
         molecules = Molecular()
         molecules.set_filename_report('data/molecular/run_once/molecular_output2.txt')
-        mol_model = molecules.start_molecular()
+        _ = molecules.start_molecular()
         maximum_length_smiles = int(molecules.get_maximum_length())
         
         self.__create_ccle2depmap_and_depmap2ccle()
