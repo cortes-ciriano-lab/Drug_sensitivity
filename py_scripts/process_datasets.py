@@ -206,7 +206,7 @@ class Process_dataset_pancancer():
             if bar in barcodes_to_use:
                 indexes = []
                 depmap_id = depmap_per_barcode[bar]
-                for j in range(prism_bottlenecks.shape[0])
+                for j in range(prism_bottlenecks.shape[0]):
                     screen = prism_bottlenecks.iloc[i].name
                     sens_value = prism_dataset.loc[depmap_id, screen.split(':::')[0]]
                     if not np.isnan(sens_value):
