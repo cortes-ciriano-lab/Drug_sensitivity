@@ -692,12 +692,6 @@ def run_drug_prediction(list_parameters):
         create_report(filename, lines)
     
     end_run = time.time()
-    for i in range(0, train_batches):
-        os.remove('pickle/train_batch_{}.pkl'.format(i))
-    for i in range(0, validation_batches):
-        os.remove('pickle/validation_batch_{}.pkl'.format(i))
-    for i in range(0, test_batches):
-        os.remove('pickle/test_batch_{}.pkl'.format(i))
     create_report(filename, ['\nTime for run: {:.2f}'.format(end_run - start_run)])
     print('Done!')
 
