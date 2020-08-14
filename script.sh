@@ -8,16 +8,16 @@ for type_data in "single_cell" ; do #"bulk"
         		network_info="${layers}_${af}_${op}"
 		        for lr in "0.00001" ; do #"0.01" "0.05"  "0.001" "0.1" "0.0001" ; do
 		            for size_batch in "64" ; do
-		                for n_epoch in "3" ; do # "10000"
+		                for n_epoch in "10" ; do 
 		                    perc_train="0.7"
 		                    perc_val="0.15"
-                            for epoch_reset in "10" ; do # "1000" "500"
+                            for epoch_reset in "5" ; do # "1000" "500"
                                 for dropout in "0.1"  ; do 
                                     for gam in "0.6" ; do
                                         for seed in "42" ; do
                                             if [ "${epoch_reset}" == "500" ] ;  then
                                                 step="100"
-                                            elif [ "${epoch_reset}" == "10" ] ;  then
+                                            elif [ "${epoch_reset}" == "5" ] ;  then
                                                 step="2"
                                             fi
                                             for data_from in "pancancer" ; do #"mcfarland", "science"

@@ -273,8 +273,7 @@ class Drug_sensitivity_single_cell:
             for i in range(len(indexes)):
                 barcode, prism_bot_index, sens = self.new_indexes2barcode_screen[indexes[i]]
                 sens_list.append(str(sens))
-                f.write('{},{},{},{},{}, {}\n'.format(indexes[i], barcode[0],
-                                                      prism_bot_index[0].split(':::')[0], sens, output[i].strip('\n')))
+                f.write('{},{},{},{}, {}\n'.format(indexes[i], barcode[0], prism_bot_index[0].split(':::')[0], sens, output[i].strip('\n')))
         
         with open('pickle/{}_set_real_values.txt'.format(type_data), 'w') as f:
             f.write('\n'.join(sens_list))
@@ -543,7 +542,7 @@ class Drug_sensitivity_single_cell:
 
     def create_filename(self, list_parameters):
 
-        filename_output = '{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(list_parameters[15], list_parameters[1], list_parameters[2],
+        filename_output = '{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(list_parameters[15], list_parameters[1], list_parameters[2],
                                                                           list_parameters[3], list_parameters[4], list_parameters[5],
                                                                           list_parameters[6], list_parameters[7], list_parameters[8],
                                                                           list_parameters[9], list_parameters[10], list_parameters[11],
@@ -579,15 +578,14 @@ class Drug_sensitivity_single_cell:
 
 def run_drug_prediction(list_parameters):
     start_run = time.time()
-    with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/delete.txt', 'a') as f:
-        f.write('Starting: ')
-        f.write(str(datetime.datetime.now().time()))
-        f.write('\n')
-    print()
+    print(str(datetime.datetime.now().time()))
     drug_sens = Drug_sensitivity_single_cell()
 
     #filename for the reports
     filename = drug_sens.create_filename(list_parameters)
+    with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/run.txt', 'a') as f:
+            f.write(filename)
+            f.write('\n')
     drug_sens.set_parameters(list_parameters)
 
     model_architecture = drug_sens.get_model_architecture()
@@ -595,9 +593,6 @@ def run_drug_prediction(list_parameters):
 
     #get the indexes
     train_set_index, validation_set_index, test_set_index = drug_sens.get_indexes()
-    with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/delete.txt', 'a') as f:
-        f.write('indexes done... {:.0f}\n'.format(time.time() - start_run))
-    now = time.time()
 
     #load and process the datasets
     # pancancer_bottlenecks = pd.read_csv('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/single_cell/pancancer_with_alpha_outputs.csv', header = 0, index_col = 0)
@@ -609,9 +604,6 @@ def run_drug_prediction(list_parameters):
     prism_bottlenecks.index.name = 'screen'
     pancancer_bottlenecks = pancancer_bottlenecks.to_numpy()
     prism_bottlenecks = prism_bottlenecks.to_numpy()
-    with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/delete.txt', 'a') as f:
-        f.write('Loading done... {:.0f}\n'.format(time.time() - now))
-    now = time.time()
 
     #start the Drug Sensitivity model
     if model_architecture == 'NNet':
@@ -619,21 +611,10 @@ def run_drug_prediction(list_parameters):
     else:
         model = drug_sens.initialize_model(size_input=[])
 
-    with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/delete.txt', 'a') as f:
-        f.write('Network started... {:.0f}\n'.format(time.time() - now))
-    now = time.time()
-
     #train the model
     model_trained = drug_sens.train_model(model, pancancer_bottlenecks, prism_bottlenecks, train_set_index, validation_set_index)
-    with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/delete.txt', 'a') as f:
-        f.write('Model trained... {:.0f}\n'.format(time.time() - now))
-    now = time.time()
     
     drug_sens.run_test_set(model_trained, pancancer_bottlenecks, prism_bottlenecks, test_set_index)
-    with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/delete.txt', 'a') as f:
-        f.write('test done... {:.0f}\n'.format(time.time() - now))
-    now = time.time()
-
 
     #add the predicted values to the final dataset
     drug_sens.save_dataset(train_set_index, 'Train')
