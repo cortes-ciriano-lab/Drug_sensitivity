@@ -1,45 +1,16 @@
-Starting: 16:12:13.865875
-indexes done... 6
-Loading done... 106
-trainset done... 7
-validation done... 2
-Network started... 1
-Model trained... 1
-test done... 2
-test done... 0
-Starting: 16:16:45.472265
-indexes done... 6
-Loading done... 107
-trainset done... 1
-validation done... 0
-Network started... 1
-Model trained... 1
-test done... 0
-test done... 0
-Starting: 16:22:33.152546
-indexes done... 6
-Loading done... 106
-trainset done... 9
-validation done... 2
-Network started... 1
-Model trained... 3
-test done... 2
-test done... 0
-Starting: 16:25:31.770169
-indexes done... 6
-Loading done... 109
-trainset done... 56
-validation done... 12
-Network started... 1
-Model trained... 2
-test done... 12
-test done... 0
-Starting: 16:29:43.166629
-indexes done... 6
-Loading done... 116
-trainset done... 10
-validation done... 2
-Network started... 1
-Model trained... 2
-test done... 2
-test done... 0
+Starting: 16:59:22.831844
+indexes done... 13
+Loading done... 96
+Network started... 2
+Model trained... 5947
+test done... 512
+Starting: 19:18:36.775645
+indexes done... 12
+Loading done... 96
+Network started... 2
+Model trained... 5523
+test done... 485
+Starting: 14:42:44.626637
+indexes done... 2
+Loading done... 0
+Network started... 2

@@ -162,28 +162,23 @@ class Drug_sensitivity_single_cell:
             barcode2indexes = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_new_indexes_5percell_line_once_dict.pkl', 'rb'))
             ccle_per_barcode = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/ccle_per_barcode_dict.pkl', 'rb'))
 
-            with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_tumours.txt', 'r') as f:
-                list_tumours = f.readlines()
+            metadata = pd.read_csv('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/single_cell/pancancer_summary_bottlenecks_metadata.csv', header = 0, index_col = 0)
 
-            list_cells = []
+            list_tumours = list(metadata['Cancer_type'].unique())
 
             barcodes_per_tumour = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/barcodes_per_tumour_dict.pkl', 'rb'))
 
             if self.type_of_split == 'random':
-                list_tumours = shuffle(list_tumours)
-                list_barcodes_pancancer = []
-                for i in range(len(list_tumours)):
-                    tumour = list_tumours[i].strip('\n')
-                    list_barcodes_pancancer.extend(barcodes_per_tumour[tumour])
-
+                # list_tumours = list_tumours[:4]
+                list_cells = list(metadata.loc[metadata['Cancer_type'].isin(list_tumours)].index)
                 list_final_indexes = []
-                for bar in list_barcodes_pancancer:
-                    list_cells.append(ccle_per_barcode[bar])
+                for cells in list_cells:
                     try:
-                        list_final_indexes.extend(barcode2indexes[bar])
+                        list_final_indexes.extend(barcode2indexes[cells])
                     except:
                         pass
-                list_final_indexes = shuffle(list_final_indexes[:5000000])
+                
+                # list_final_indexes = shuffle(list_final_indexes[:500])
 
                 train_number = int(self.perc_train * len(list_final_indexes))
                 validation_number = int(self.perc_val * len(list_final_indexes))
@@ -218,8 +213,6 @@ class Drug_sensitivity_single_cell:
                     test_set.extend(barcode2indexes[bar])
 
             elif self.type_of_split == 'leave-one-tumour-out':
-                list_tumours = [x.strip('\n') for x in list_tumours]
-
                 list_tumours.remove(self.to_test)
 
                 train_tumours = list_tumours[:-1]
@@ -250,7 +243,7 @@ class Drug_sensitivity_single_cell:
                  'Test set: {}'.format(len(test_set)),
                  '\n']
         create_report(self.filename_report, lines)
-        return train_set, validation_set, test_set, list_cells
+        return train_set, validation_set, test_set
 
     # --------------------------------------------------
 
@@ -276,11 +269,11 @@ class Drug_sensitivity_single_cell:
         
         sens_list = []
         with open('pickle/{}_set_total.txt'.format(type_data), 'w') as f:
-            f.write(','.join(['index', 'sc_barcode', 'cell_line', 'screen_id', 'real_sensitivity', 'predicted_sensitivity']))
+            f.write(','.join(['index', 'cell_line', 'screen_id', 'real_sensitivity', 'predicted_sensitivity']))
             for i in range(len(indexes)):
                 barcode, prism_bot_index, sens = self.new_indexes2barcode_screen[indexes[i]]
                 sens_list.append(str(sens))
-                f.write('{},{},{},{},{}, {}\n'.format(indexes[i], barcode[0], self.ccle_per_barcode[barcode[0]],
+                f.write('{},{},{},{},{}, {}\n'.format(indexes[i], barcode[0],
                                                       prism_bot_index[0].split(':::')[0], sens, output[i].strip('\n')))
         
         with open('pickle/{}_set_real_values.txt'.format(type_data), 'w') as f:
@@ -582,8 +575,6 @@ class Drug_sensitivity_single_cell:
              self.dropout, self.gamma, self.step_size, self.seed, self.epoch_reset, self.type_of_split,
              self.to_test, self.data_from, self.model_architecture, self.device], open('pickle/list_initial_parameters_single_cell.pkl', 'wb'))
 
-    # --------------------------------------------------
-
 # -------------------------------------------------- RUN --------------------------------------------------
 
 def run_drug_prediction(list_parameters):
@@ -603,13 +594,15 @@ def run_drug_prediction(list_parameters):
     size_batch = drug_sens.get_size_batch()
 
     #get the indexes
-    train_set_index, validation_set_index, test_set_index, list_cells = drug_sens.get_indexes()
+    train_set_index, validation_set_index, test_set_index = drug_sens.get_indexes()
     with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/delete.txt', 'a') as f:
         f.write('indexes done... {:.0f}\n'.format(time.time() - start_run))
     now = time.time()
 
     #load and process the datasets
-    pancancer_bottlenecks = pd.read_csv('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/single_cell/pancancer_with_alpha_outputs.csv', header = 0, index_col = 0)
+    # pancancer_bottlenecks = pd.read_csv('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/single_cell/pancancer_with_alpha_outputs.csv', header = 0, index_col = 0)
+    #summary bottlenecks
+    pancancer_bottlenecks = pd.read_csv('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/single_cell/pancancer_summary_bottlenecks.csv', header = 0, index_col = 0)
     prism_bottlenecks = pd.read_csv('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/molecular/run_once/prism_bottlenecks.csv', header = 0, index_col = 0)
     n_genes = int(pancancer_bottlenecks.shape[1] + prism_bottlenecks.shape[1])
     pancancer_bottlenecks.index.name = 'barcode'

@@ -16,5 +16,5 @@ loss_results_pancancer.txt
 e_parse.log
 o_parse.log
 5K_results
-smaller_dataset_results/
 delete.txt
+smaller_dataset_results/

@@ -194,10 +194,10 @@ class Process_dataset_pancancer():
             indexes = []
             for j in range(prism_bottlenecks.shape[0]):
                 screen = prism_bottlenecks.iloc[j].name
-                sens_value = prism_dataset[depmap, screen.split(':::')[0]]
+                sens_value = prism_dataset.loc[depmap, screen.split(':::')[0]]
                 if not np.isnan(sens_value):
                     new_index = '{}::{}'.format(ccle, screen)
-                    new_indexes_dict[new_index] = ((bar, i), (screen, j), sens_value)
+                    new_indexes_dict[new_index] = ((ccle, i), (screen, j), sens_value)
                     indexes.append(new_index)
             barcode2indexes[ccle] = indexes
 
@@ -214,13 +214,14 @@ class Process_dataset_pancancer():
             subset = sc_bottlenecks.loc[v, :].iloc[:, :-1]
             mean_subset = subset.mean()
             data[k] = mean_subset.to_numpy()
-            metadata[k] = [len(v), self.ccle2depmap[k], list(sc_metadata.loc[v, 'Cancer_type'].unique())]
+            metadata[k] = [len(v), self.ccle2depmap[k], sc_metadata.loc[v, 'Cancer_type'].unique()]
 
         data = pd.DataFrame.from_dict(data, orient='index')
         metadata = pd.DataFrame.from_dict(metadata, orient='index')
+        metadata.columns = ['Number_single_cells', 'DepMap_id', 'Cancer_type']
 
-        metadata.reset_index().to_csv('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/single_cell/pancancer_summary_bottlenecks_metadata.csv', header=True, index = False))
-        data.reset_index().to_csv('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/single_cell/pancancer_summary_bottlenecks.csv', header=True, index=False))
+        metadata.reset_index().to_csv('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/single_cell/pancancer_summary_bottlenecks_metadata.csv', header=True, index = False)
+        data.reset_index().to_csv('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/single_cell/pancancer_summary_bottlenecks.csv', header=True, index=False)
 
         data.set_index(list(data.columns)[0])
         return data
