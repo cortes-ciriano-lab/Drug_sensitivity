@@ -180,16 +180,15 @@ class Process_dataset_pancancer():
 
     # --------------------------------------------------
     
-    def create_integrated_datasets(self, screens_list, prism_dataset, prism_bottlenecks, pancancer_bottlenecks, what_type):
-        '''
-        This function will create different subpartions (per cell line) of the final dataset.
-        '''
-
+    def create_integrated_datasets(self, screens_list, prism_dataset, prism_bottlenecks, pancancer_bottlenecks, pancancer_metadata, what_type):
         barcode2indexes = {}
         new_indexes_dict = {}
+        # ccle_to_barcode = {}
 
-        for i in range(pancancer_bottlenecks.shape[0]):
-            ccle = pancancer_bottlenecks.iloc[i].name
+        for ccle in pancancer_metadata['Cell_line'].unique():
+            barcodes = list(pancancer_metadata.loc[pancancer_metadata['Cell_line'] == ccle].index)
+            barcodes = {x : pancancer_bottlenecks.index.get_loc(x) for x in barcodes}
+            # ccle_to_barcode[ccle] = list(barcodes.keys())
             depmap = self.ccle2depmap[ccle]
             indexes = []
             for j in range(prism_bottlenecks.shape[0]):
@@ -197,34 +196,13 @@ class Process_dataset_pancancer():
                 sens_value = prism_dataset.loc[depmap, screen.split(':::')[0]]
                 if not np.isnan(sens_value):
                     new_index = '{}::{}'.format(ccle, screen)
-                    new_indexes_dict[new_index] = ((ccle, i), (screen, j), sens_value)
+                    new_indexes_dict[new_index] = ((ccle, barcodes), (screen, j), sens_value)
                     indexes.append(new_index)
             barcode2indexes[ccle] = indexes
 
-        pickle.dump(barcode2indexes, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_new_indexes_5percell_line_once_dict.pkl', 'wb'))
-        pickle.dump(new_indexes_dict, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_new_indexes_5percell_line_once_newIndex2barcodeScreen_dict.pkl', 'wb'))
-
-    # --------------------------------------------------
-
-    def create_summary_sc_bottlenecks(self, sc_bottlenecks, sc_metadata):
-        data = {}
-        metadata = {}
-
-        for k, v in self.barcodes_per_cell_line.items():
-            subset = sc_bottlenecks.loc[v, :].iloc[:, :-1]
-            mean_subset = subset.mean()
-            data[k] = mean_subset.to_numpy()
-            metadata[k] = [len(v), self.ccle2depmap[k], sc_metadata.loc[v, 'Cancer_type'].unique()]
-
-        data = pd.DataFrame.from_dict(data, orient='index')
-        metadata = pd.DataFrame.from_dict(metadata, orient='index')
-        metadata.columns = ['Number_single_cells', 'DepMap_id', 'Cancer_type']
-
-        metadata.reset_index().to_csv('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/single_cell/pancancer_summary_bottlenecks_metadata.csv', header=True, index = False)
-        data.reset_index().to_csv('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/single_cell/pancancer_summary_bottlenecks.csv', header=True, index=False)
-
-        data.set_index(list(data.columns)[0])
-        return data
+        pickle.dump(barcode2indexes, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_new_indexes_{}_dict.pkl'.format(what_type), 'wb'))
+        pickle.dump(new_indexes_dict, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_new_indexes_{}_newIndex2barcodeScreen_dict.pkl'.format(what_type), 'wb'))
+        # pickle.dump(ccle_to_barcode, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_new_indexes_{}_ccle2barcode_dict.pkl'.format(what_type), 'wb'))
 
     # --------------------------------------------------
     
@@ -310,8 +288,7 @@ class Process_dataset_pancancer():
         pancancer_bottlenecks, _ = create_pancancer_bottleneck()
         #create the integrate files
 
-        pancancer_summary_bottlenecks = self.create_summary_sc_bottlenecks(pancancer_bottlenecks, pancancer_metadata)
-        self.create_integrated_datasets(list_indexes_prism, prism_matrix, prism_bottlenecks, pancancer_summary_bottlenecks, 'once')
+        self.create_integrated_datasets(list_indexes_prism, prism_matrix, prism_bottlenecks, pancancer_bottlenecks, pancancer_metadata, 'once')
         
         # del list_indexes_prism
         # gc.collect()
