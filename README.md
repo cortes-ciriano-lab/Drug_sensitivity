@@ -1,4 +1,4 @@
-Random Forest to predict cellular sensitivity to different compounds.
+Neural network to predict cellular sensitivity to different compounds.
 
 Compounds and Screen data - PRISM
 
