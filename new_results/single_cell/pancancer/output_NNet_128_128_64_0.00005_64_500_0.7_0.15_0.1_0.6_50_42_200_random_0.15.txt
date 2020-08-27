@@ -13,7 +13,3 @@ Training set: 590970
 Validation set: 126636
 Test set: 126637
 
-
-*About the network
-<generator object Module.modules at 0x2b48be436b50>
-Runs on: cuda 
