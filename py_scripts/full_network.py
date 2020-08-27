@@ -10,21 +10,6 @@ import torch.nn.functional as F
 
 seed = 42
 torch.manual_seed(seed)
-
-# -------------------------------------------------- ANOTHER FUNCTIONS --------------------------------------------------
-
-def get_activation_function(af_key, input_value):
-    dict_activation_functions = {'elu': F.elu(input_value), 'hardtanh': F.hardtanh(input_value),
-                                 'leakyrelu': F.leaky_relu(input_value), 'logsigmoid': F.logsigmoid(input_value),
-                                 'relu': F.relu(input_value), 'relu6': F.relu6(input_value),
-                                 'rrelu': F.rrelu(input_value), 'selu': F.selu(input_value),
-                                 'celu': F.celu(input_value), 'sigmoid': F.sigmoid(input_value),
-                                 'softplus': F.softplus(input_value), 'softshrink': F.softshrink(input_value),
-                                 'softsign': F.softsign(input_value), 'tanh': F.tanh(input_value),
-                                 'tanhshrink': F.tanhshrink(input_value), 'gelu':F.gelu(input_value),
-                                 'hardshrink': F.hardshrink(input_value), 'softmin': F.softmin(input_value)}
-    
-    return dict_activation_functions[af_key]
     
 # -------------------------------------------------- FULL NETWORK --------------------------------------------------
 
@@ -41,7 +26,6 @@ class NN_drug_sensitivity(nn.Module):
         while i < len(layers) and (i+1) < len(layers):
             self.layers.append([layers[i],layers[i+1]])
             i += 1
-        self.activation_function_key = kwargs['activation_function']
         self.dropout_prob = float(kwargs['dropout_prob'])
 
         #Definition of the network
@@ -51,10 +35,10 @@ class NN_drug_sensitivity(nn.Module):
 
     def forward(self, x):
         for i, l in enumerate(self.fc_layers):
-            x = get_activation_function(self.activation_function_key, self.fc_layers[i](x))
-            if i != len(self.layers):
+            x = l(x)
+            if i != len(self.layers)-1:
+                x = F.relu(x)
                 x = F.dropout(x, self.dropout_prob, inplace = True)
-
         return x
 
 #-------------------------------------------------- VAE - GENE EXPRESSION - SINGLE CELL --------------------------------------------------

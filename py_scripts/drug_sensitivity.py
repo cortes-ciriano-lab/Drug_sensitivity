@@ -33,7 +33,7 @@ torch.manual_seed(seed)
 # -------------------------------------------------- ANOTHER FUNCTIONS --------------------------------------------------
 
 def create_report(filename, list_comments):
-    with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/results/{}'.format(filename), 'a') as f:
+    with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/new_results/{}'.format(filename), 'a') as f:
         f.write('\n'.join(list_comments))
 
 # --------------------------------------------------
@@ -61,8 +61,6 @@ class Drug_sensitivity_single_cell:
         self.model_architecture = None
 
         # if NNet
-        self.optimiser = None
-        self.activation_function = None
         self.layers_info = None
 
         # if RF
@@ -103,9 +101,7 @@ class Drug_sensitivity_single_cell:
 
         if self.model_architecture == 'NNet':
             network_info = list_parameters[1].split('_')
-            self.optimiser = network_info[-1]
-            self.activation_function = network_info[-2]
-            self.layers_info = [x for x in network_info[:-2]]
+            self.layers_info = [x for x in network_info]
             self.layers_info.append('1')
 
         else:
@@ -163,9 +159,24 @@ class Drug_sensitivity_single_cell:
 
     def get_indexes(self):
         if self.data_from == 'pancancer':
+            # with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_tumours.txt', 'r') as f:
+            #         list_tumours = f.readlines()
+            
             if self.type_of_split == 'random':
+                
+                # list_tumours = [x.strip('\n') for x in list_tumours[:4]]
+                # metadata = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/pkl_files/pancancer_metadata.pkl', 'rb'))
+                # list_cell_lines = list(metadata.loc[metadata['Cancer_type'].isin(list_tumours)]['Cell_line'])
+                # barcode2indexes = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_new_indexes_once_dict.pkl', 'rb'))
+                # 
+                # final_indexes = []
+                # for ccle in barcode2indexes.keys():
+                #     if ccle in list_cell_lines:
+                #         final_indexes.extend(barcode2indexes[ccle])
+                
+                
                 final_indexes = list(self.new_indexes2barcode_screen.keys())
-                final_indexes = shuffle(final_indexes)[:10000]
+                final_indexes = shuffle(final_indexes)
 
                 train_number = int(self.perc_train * len(final_indexes))
                 validation_number = int(self.perc_val * len(final_indexes))
@@ -262,7 +273,8 @@ class Drug_sensitivity_single_cell:
 
         if epoch > 0:
             self.set_seed(self.seed)
-        return TensorDataset(torch.tensor(data).type('torch.FloatTensor'), torch.tensor(np.array(sensitivity)).type('torch.FloatTensor'))
+            
+        return torch.Tensor(data).type('torch.FloatTensor'), torch.Tensor(np.array(sensitivity)).type('torch.FloatTensor')
 
     # --------------------------------------------------
 
@@ -283,7 +295,7 @@ class Drug_sensitivity_single_cell:
             for i in range(len(indexes)):
                 _, prism_bot_index, sens = self.new_indexes2barcode_screen[indexes[i]]
                 sens_list.append(str(sens))
-                f.write('{},{},{},{},{}\n'.format(indexes[i], barcodes[i].strip('\n'), prism_bot_index[0].split(':::')[0], sens, output[i].strip('\n')))
+                f.write('{},{},{},{},{}\n'.format(indexes[i], barcodes[i].strip('\n'), prism_bot_index[0].split(':::')[0], sens, float(output[i].strip('\n'))))
         
         with open('pickle/{}_set_real_values.txt'.format(type_data), 'w') as f:
             f.write('\n'.join(sens_list))
@@ -296,7 +308,6 @@ class Drug_sensitivity_single_cell:
             self.first_layer = int(size_input)
             model = NN_drug_sensitivity(input_size=self.first_layer,
                                         layers=self.layers_info,
-                                        activation_function=self.activation_function,
                                         dropout_prob=self.dropout)
             model.to(self.device)
             lines = ['\n*About the network',
@@ -319,17 +330,6 @@ class Drug_sensitivity_single_cell:
     # --------------------------------------------------
 
     def __train_validation_nnet(self, model, pancancer_bottlenecks, prism_bottlenecks, train_set_index, validation_set_index):
-        dict_optimisers = {'adagrad':optim.Adagrad(model.parameters(), lr=self.learning_rate),
-                   'adam':optim.Adam(model.parameters(), lr=self.learning_rate),
-                   'adamw':optim.AdamW(model.parameters(), lr=self.learning_rate),
-                   'sparseadam':optim.SparseAdam(model.parameters(), lr=self.learning_rate),
-                   'adamax':optim.Adamax(model.parameters(), lr=self.learning_rate),
-                   'asgd':optim.ASGD(model.parameters(), lr=self.learning_rate),
-                   'lbfgs':optim.LBFGS(model.parameters(), lr=self.learning_rate),
-                   'rmsprop':optim.RMSprop(model.parameters(), lr=self.learning_rate),
-                   'rprop':optim.Rprop(model.parameters(), lr=self.learning_rate),
-                   'sgd':optim.SGD(model.parameters(), lr=self.learning_rate)}
-
         seeds = []
         while len(seeds) < self.n_epochs:
             x = random.randint(0,100000)
@@ -341,7 +341,7 @@ class Drug_sensitivity_single_cell:
         n_epochs_not_getting_better = 0
         best_epoch = None
 
-        optimizer = dict_optimisers[self.optimiser]
+        optimizer = optim.Adam(model.parameters(), lr=self.learning_rate)
         best_model = copy.deepcopy(model.state_dict())  # save the best model yet with the best accuracy and lower loss value
         decay_learning_rate = lr_scheduler.StepLR(optimizer, step_size=self.step_size, gamma=self.gamma)
 
@@ -366,7 +366,7 @@ class Drug_sensitivity_single_cell:
                 print('-' * 10)
                 print('Epoch: {} of {}'.format(epoch + 1, self.n_epochs))
                 if epoch != 0:
-                    optimizer = dict_optimisers[self.optimiser]
+                    optimizer = optim.Adam(model.parameters(), lr=self.learning_rate)
                     decay_learning_rate = lr_scheduler.StepLR(optimizer, step_size=self.step_size, gamma=self.gamma)
 
             # epoch learning rate value
@@ -378,15 +378,14 @@ class Drug_sensitivity_single_cell:
             # train_predictions_complete = []
             n_batches = 0
             for i in range(0, len(train_set_index), self.size_batch):
-                data = self.get_batches(pancancer_bottlenecks, prism_bottlenecks, train_set_index[i:int(i+self.size_batch)], 'Train', seed, epoch)
-                inputs, real_values = data
+                inputs, real_values = self.get_batches(pancancer_bottlenecks, prism_bottlenecks, train_set_index[i:int(i+self.size_batch)], 'Train', seed, epoch)
                 inputs = inputs.to(self.device)
                 real_values = real_values.to(self.device)
                 optimizer.zero_grad()  # set the gradients of all parameters to zero
                 train_predictions = model(inputs)  # output predicted by the model
                 train_current_loss = self.__loss_function(real_values, train_predictions)
                 train_current_loss.backward()  # backpropagation
-                # torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
                 optimizer.step()
                 # train_predictions_complete.extend(train_predictions.detach().cpu().numpy().tolist())
                 if i == 0:
@@ -411,7 +410,6 @@ class Drug_sensitivity_single_cell:
                     inputs, real_values = self.get_batches(pancancer_bottlenecks, prism_bottlenecks, validation_set_index[i:int(i+self.size_batch)], 'Validation', seed, epoch)
                     inputs = inputs.to(self.device)
                     real_values = real_values.to(self.device)
-                    print(real_values, inputs)
                     validation_predictions = model(inputs)  # output predicted by the model
                     validation_current_loss = self.__loss_function(real_values, validation_predictions)
                     validation_loss_epoch += validation_current_loss.item()
@@ -427,7 +425,7 @@ class Drug_sensitivity_single_cell:
             loss_values_validation[epoch] = validation_loss_epoch
             times_validation[epoch] = end_validation_time - start_validation_time
 
-            if epoch == 0 or (validation_loss_epoch < best_loss[1] and not train_predictions_complete.any() and not validation_predictions_complete.any()):  # means that this model is best one yet
+            if epoch == 0 or validation_loss_epoch < best_loss[1]:  # means that this model is best one yet
                 best_loss = (train_loss_epoch, validation_loss_epoch)
                 best_model = copy.deepcopy(model.state_dict())
                 with open('pickle/Train_output.txt', 'w') as f:
@@ -441,7 +439,7 @@ class Drug_sensitivity_single_cell:
                 got_better = True
                 n_epochs_not_getting_better = 0
                 pickle.dump(best_model, open('pickle/best_model_parameters.pkl', 'wb'))
-                best_epoch = epoch
+                best_epoch = copy.copy(epoch)
 
             else:
                 self.train_barcodes = []
@@ -503,8 +501,6 @@ class Drug_sensitivity_single_cell:
     # --------------------------------------------------
 
     def __loss_function(self, x_input, x_output):
-        # criterion = nn.MSELoss()
-        # reconstruction_loss = criterion(x_output, x_input)
         criterion = nn.MSELoss()
         reconstruction_loss = criterion(x_output, x_input)
         return reconstruction_loss
@@ -612,7 +608,7 @@ class Drug_sensitivity_single_cell:
 
     def save_parameters(self):
         if self.model_architecture == 'NNet':
-            network_info = '{}_{}_{}'.format(self.layers_info[-1], self.activation_function, self.optimiser)
+            network_info = '{}'.format(self.layers_info[-1])
             pickle.dump([network_info, self.learning_rate, self.size_batch, self.n_epochs, self.perc_train, self.perc_val,
              self.dropout, self.gamma, self.step_size, self.seed, self.epoch_reset, self.type_of_split,
              self.to_test, self.data_from, self.model_architecture, self.device], open('pickle/list_initial_parameters_single_cell.pkl', 'wb'))

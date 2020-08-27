@@ -1,1 +1,0 @@
-single_cell/pancancer/output_NNet_128_64_32_relu_adam_0.1_64_10_0.7_0.15_0.1_0.6_1_42_2_random_0.15.txt
