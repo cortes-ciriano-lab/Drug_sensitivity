@@ -4,9 +4,9 @@ bgadd -L 15 /drug_nnet
 
 #NNet
 for type_data in "single_cell" ; do #"bulk"
-    for network_info in "128_128_64" "128_64_32_16" "128_32" "64_32" ; do
-        for lr in "0.00005" "0.1" "0.5" "0.001" "0.005" "0.00001" "0.01" "0.05" "0.0001" "0.0005"; do
-            for size_batch in "64" ; do
+    for network_info in "64_32" "128_128_64" "128_64_32_16" "128_32" ; do
+        for lr in "0.0005" "0.00005" "0.1" "0.5" "0.001" "0.005" "0.00001" "0.01" "0.05" "0.0001" ; do
+            for size_batch in "128" ; do
                 for n_epoch in "500" ; do 
                     perc_train="0.7"
                     perc_val="0.15"

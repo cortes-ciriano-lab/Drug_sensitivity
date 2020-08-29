@@ -336,7 +336,8 @@ class Drug_sensitivity_single_cell:
             if x not in seeds:
                 seeds.append(x)
 
-        epoch_stop = int(1.5 * self.epoch_reset)
+        # epoch_stop = int(1.5 * self.epoch_reset)
+        epoch_stop = 80
         got_better = False
         n_epochs_not_getting_better = 0
         best_epoch = None
@@ -466,6 +467,7 @@ class Drug_sensitivity_single_cell:
             decay_learning_rate.step()
 
             if n_epochs_not_getting_better >= epoch_stop and best_epoch != 0:
+                create_report(self.filename_report, ['\nWarning!!! Training stopped because the loss was not improving.'])
                 break
 
         # Saving the results
