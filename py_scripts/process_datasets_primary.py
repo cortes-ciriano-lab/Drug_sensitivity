@@ -21,11 +21,10 @@ np.random.seed(seed)
 
 # -------------------------------------------------- DEFINE PATHS --------------------------------------------------
 
-
 path_data = '/hps/research1/icortes/acunha/data/'
 # path_data = 'C:/Users/abeat/Dropbox/data'
 #
-path_results = '/hps/research1/icortes/acunha/python_scripts/single_cell/' #cluster
+path_results = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/' #cluster
 # path_results = 'C:/Users/abeat/Documents/GitHub/Drug_sensitivity/'
 
 # -------------------------------------------------- PROCESS DATASETS --------------------------------------------------
@@ -44,7 +43,7 @@ class Process_dataset_pancancer():
     # --------------------------------------------------
 
     def __create_ccle2depmap_and_depmap2ccle(self):
-        cell_info = pd.read_csv('/hps/research1/icortes/acunha/data/CCLE/sample_info.csv', index_col=0, header=0)
+        cell_info = pd.read_csv('{}/CCLE/sample_info.csv'.format(path_data), index_col=0, header=0)
         for i in range(cell_info.shape[0]):
             self.ccle2depmap[cell_info['CCLE_Name'].iloc[i]] = cell_info.iloc[i, :].name #converter ccle to depmap
             self.depmap2ccle[cell_info.iloc[i, :].name] = cell_info['CCLE_Name'].iloc[i] #converter depmap to ccle
@@ -56,12 +55,12 @@ class Process_dataset_pancancer():
     
     def load_pancancer(self):
         #gene_expresion :: rows: AAACCTGAGACATAAC-1-18 ; columns: RP11-34P13.7
-        pancancer_data = pickle.load(open('/hps/research1/icortes/acunha/data/PANCANCER/pancancer_data.pkl', 'rb'))
+        pancancer_data = pickle.load(open('{}/PANCANCER/pancancer_data.pkl'.format(path_data), 'rb'))
         print('\n Pancancer dataset (after loading)')
         print(pancancer_data.shape)
         
         #metadata :: rows: AAACCTGAGACATAAC-1-18 ; Cell_line: NCIH2126_LUNG (CCLE_name)
-        pancancer_metadata= pickle.load(open('/hps/research1/icortes/acunha/data/PANCANCER/pancancer_metadata.pkl', 'rb'))
+        pancancer_metadata= pickle.load(open('{}/PANCANCER/pancancer_metadata.pkl'.format(path_data), 'rb'))
         print('\n Pancancer metadata (after loading)')
         print(pancancer_metadata.shape)
         
@@ -83,7 +82,7 @@ class Process_dataset_pancancer():
     def load_prism(self, maximum_length_smiles):
         if self.prism_screen == 'primary':
             #rows: ACH-000001 ; columns: BRD-A00077618-236-07-6::2.5::HTS
-            prism_matrix = pd.read_csv('/hps/research1/icortes/acunha/data/Drug_Sensitivity_PRISM/primary-screen-replicate-collapsed-logfold-change.csv', sep=',', header=0,
+            prism_matrix = pd.read_csv('{}/Drug_Sensitivity_PRISM/primary-screen-replicate-collapsed-logfold-change.csv'.format(path_data), sep=',', header=0,
                                         index_col=0)
             # rows: BRD-A00055058-001-01-0::2.325889319::MTS004
             prism_metadata = pd.read_csv(
