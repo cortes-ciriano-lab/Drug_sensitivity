@@ -155,9 +155,9 @@ class Molecular():
                 predictions_complete.extend(list(data_predictions[0].cpu().numpy()))
                 bottleneck_complete.extend(list(data_predictions[1].cpu().numpy()))
 
-        total_loss = total_loss / len(data_batch)
-        reconstruction_loss = reconstruction_loss / len(data_batch)
-        kl_loss = kl_loss / len(data_batch)
+        total_loss = total_loss / len(data_loader)
+        reconstruction_loss = reconstruction_loss / len(data_loader)
+        kl_loss = kl_loss / len(data_loader)
 
         free_memory = [data_loader, data_predictions]
         for item in free_memory:

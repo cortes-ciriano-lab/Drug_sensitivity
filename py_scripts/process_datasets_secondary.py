@@ -64,12 +64,12 @@ class Process_dataset_pancancer():
         
     def load_prism(self, maximum_length_smiles):
         #rows: ACH-000001 ; columns: BRD-A00077618-236-07-6::2.5::HTS
-        prism_matrix = pd.read_csv('{}/Prism_19Q4_secondary/secondary-screen-cell-line-info.csv'.format(path_data), header=0, usecols= ['broad_id', 'depmap_id', 'ccle_name', 'screen_id', 'auc', 'name', 'moa', 'target', 'smiles', 'passed_str_profiling'])
+        prism_matrix = pd.read_csv('{}/Prism_19Q4_secondary/secondary-screen-dose-response-curve-parameters.csv'.format(path_data), header=0, nrows = 200, usecols= ['broad_id', 'depmap_id', 'ccle_name', 'screen_id', 'auc', 'name', 'moa', 'target', 'smiles', 'passed_str_profiling'])
         print('\n PRISM dataset (after loading)')
         print(prism_matrix.shape)
         
         #filter the smiles - drop nan values (1), that has passed_str_profiling TRUE (2), standardise the smiles (3) and check if the standardised smile is compatible with the molecular VAE (4)
-        prism_matrix = prism_matrix.loc[prism_matrix['passed_str_profiling'] == 'TRUE']
+        prism_matrix = prism_matrix.loc[prism_matrix['passed_str_profiling']]
         prism_matrix.dropna(subset=['smiles', 'auc'], inplace=True) # (1) - only keep data with smiles and valid auc values
         
         for i in range(len(prism_matrix['smiles'])):
@@ -83,7 +83,7 @@ class Process_dataset_pancancer():
                 smiles = [smile]
             
             standard_smiles = [] # (2)
-            for s in list(smiles):
+            for s in smiles:
                 try:
                     mol = standardise.run(s)
                     standard_smiles.append(mol)
@@ -158,11 +158,10 @@ class Process_dataset_pancancer():
     def run(self):
         #initialize the molecular model
         molecules = Molecular()
-        molecules.set_filename_report('{}/data_secondary/molecular/run_once/molecular_output2.txt'.format(path_results))
+        molecules.set_filename_report('/data_secondary/molecular/run_once/molecular_output2.txt'.format(path_results))
         _ = molecules.start_molecular()
         maximum_length_smiles = int(molecules.get_maximum_length())
         
-        self.__create_ccle2depmap_and_depmap2ccle()
         prism_matrix = self.load_prism(maximum_length_smiles)
         pancancer_data, pancancer_metadata = self.load_pancancer()
         

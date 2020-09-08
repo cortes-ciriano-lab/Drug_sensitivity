@@ -23,7 +23,7 @@ def create_prism_bottleneck_run_once():
     #initialize the single cell model
     print('Molecular model: started \n ')
     molecules = Molecular()
-    molecules.set_filename_report('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/molecular/run_once/molecular_output.txt')
+    molecules.set_filename_report('data/molecular/run_once/molecular_output.txt')
     mol_model = molecules.start_molecular()
     maximum_length_smiles = int(molecules.get_maximum_length())
     
@@ -101,7 +101,7 @@ def create_prism_bottleneck_run_secondary():
     # initialize the single cell model
     print('Molecular model: started \n ')
     molecules = Molecular()
-    molecules.set_filename_report('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/molecular/run_once/molecular_output_secondary.txt')
+    molecules.set_filename_report('/data_secondary/molecular/run_once/molecular_output_secondary.txt')
     mol_model = molecules.start_molecular()
     maximum_length_smiles = int(molecules.get_maximum_length())
 
@@ -180,7 +180,7 @@ def create_prism_bottleneck_only_valids(times):
     #initialize the single cell model
     print('Molecular model: started \n ')
     molecules = Molecular()
-    molecules.set_filename_report('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/molecular/run_{}/molecular_output.txt'.format(times))
+    molecules.set_filename_report('/data/molecular/run_{}/molecular_output.txt'.format(times))
     mol_model = molecules.start_molecular()
     maximum_length_smiles = int(molecules.get_maximum_length())
     

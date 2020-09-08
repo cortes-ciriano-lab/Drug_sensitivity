@@ -20,3 +20,6 @@ delete.txt
 smaller_dataset_results/
 run.txt
 new_results/
+data_secondary/
+e_sec.log
+o_sec.log

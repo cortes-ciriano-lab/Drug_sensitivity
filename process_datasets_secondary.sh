@@ -1,8 +1,7 @@
 #!/bin/bash
 
-rm e.log o.log invalid_smiles.txt
-#rm -r data
-#rm -r data/molecular/run_500/ data/molecular/run_10000/
+rm e_sec.log o_sec.log invalid_smiles.txt
+rm -r data_secondary
 
 mkdir -p data_secondary/
 mkdir -p data_secondary/molecular/
@@ -18,4 +17,4 @@ mkdir -p data_secondary/prism_pancancer/csv_files
 mkdir -p data_secondary/prism_pancancer/csv_files/once
 
 
-bsub -P gpu -gpu - -M 40G -e e.log -o o.log -J prism_sec "python /hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/py_scripts/process_datasets_secondary.py pancancer"
+bsub -P gpu -gpu - -M 40G -e e_sec.log -o o_sec.log -J prism_sec "python /hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/py_scripts/process_datasets_secondary.py pancancer"
