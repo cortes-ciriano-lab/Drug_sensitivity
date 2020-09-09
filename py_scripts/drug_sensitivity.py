@@ -14,6 +14,7 @@ import sys
 import torch.utils.data
 import matplotlib.pyplot as plt
 from scipy.stats import pearsonr
+from sklearn.metrics import mean_squared_error
 import os
 import datetime
 import random
@@ -315,7 +316,7 @@ class Drug_sensitivity_single_cell:
                 'Runs on: {} \n'.format(self.device)]
         else:
             self.device = 'cpu'
-            model = RandomForestRegressor(n_estimators = self.number_trees, criterion = 'mse', random_state = self.seed)
+            model = RandomForestRegressor(n_estimators = self.number_trees, criterion = 'mse', random_state = self.seed, warm_start=True)
             lines = ['\n*About the network',
                  'Number of trees: {}'.format(self.number_trees),
                 'Runs on: {} \n'.format(self.device)]
@@ -338,7 +339,6 @@ class Drug_sensitivity_single_cell:
 
         # epoch_stop = int(1.5 * self.epoch_reset)
         epoch_stop = 80
-        got_better = False
         n_epochs_not_getting_better = 0
         best_epoch = None
 
@@ -347,11 +347,17 @@ class Drug_sensitivity_single_cell:
         decay_learning_rate = lr_scheduler.StepLR(optimizer, step_size=self.step_size, gamma=self.gamma)
 
         # Save the loss values (plot) + learning rates of each epoch (plot)
-        loss_values_training = {}  # different loss values in different epochs (training)
-        loss_values_validation = {}  # different loss values in different epoch (validation)
-        learning_rates = {}  # learning rates values per epoch
-        times_training = {}  # time spent per epoch (training)
-        times_validation = {}  # time spent per epoch (validation)
+        '''loss_values_training => different loss values in different epochs (training)
+        loss_values_validation => different loss values in different epoch (validation)
+        learning_rates => learning rates values per epoch
+        times_training => time spent per epoch (training)
+        times_validation => time spent per epoch (validation)'''
+
+        results = {'loss_values_training':{},
+                   'loss_values_validation':{},
+                   'learning_rates':{},
+                   'times_training':{},
+                   'times_validation':{}}
 
         # Training and Validation
         for epoch in range(self.n_epochs):
@@ -371,7 +377,7 @@ class Drug_sensitivity_single_cell:
                     decay_learning_rate = lr_scheduler.StepLR(optimizer, step_size=self.step_size, gamma=self.gamma)
 
             # epoch learning rate value
-            learning_rates[epoch] = optimizer.state_dict()['param_groups'][0]['lr']
+            results['learning_rates'][epoch] = optimizer.state_dict()['param_groups'][0]['lr']
 
             # TRAINING
             start_train_time = time.time()
@@ -398,8 +404,8 @@ class Drug_sensitivity_single_cell:
 
             train_loss_epoch = train_loss_epoch / n_batches
             end_train_model = time.time()
-            loss_values_training[epoch] = train_loss_epoch
-            times_training[epoch] = end_train_model - start_train_time
+            results['loss_values_training'][epoch] = train_loss_epoch
+            results['times_training'][epoch] = end_train_model - start_train_time
 
             # VALIDATION
             start_validation_time = time.time()
@@ -423,8 +429,8 @@ class Drug_sensitivity_single_cell:
 
             validation_loss_epoch = validation_loss_epoch / n_batches
             end_validation_time = time.time()
-            loss_values_validation[epoch] = validation_loss_epoch
-            times_validation[epoch] = end_validation_time - start_validation_time
+            results['loss_values_validation'][epoch] = validation_loss_epoch
+            results['times_validation'][epoch] = end_validation_time - start_validation_time
 
             if epoch == 0 or validation_loss_epoch < best_loss[1]:  # means that this model is best one yet
                 best_loss = (train_loss_epoch, validation_loss_epoch)
@@ -437,7 +443,6 @@ class Drug_sensitivity_single_cell:
                     f.write('\n'.join([str(x) for x in self.train_barcodes]))
                 with open('pickle/Validation_set_barcodes.txt', 'w') as f:
                     f.write('\n'.join([str(x) for x in self.validation_barcodes]))
-                got_better = True
                 n_epochs_not_getting_better = 0
                 pickle.dump(best_model, open('pickle/best_model_parameters.pkl', 'wb'))
                 best_epoch = copy.copy(epoch)
@@ -445,13 +450,12 @@ class Drug_sensitivity_single_cell:
             else:
                 self.train_barcodes = []
                 self.validation_barcodes = []
-                got_better = False
                 n_epochs_not_getting_better += 1
 
 
-            if (epoch + 1) % 200 == 0:
-                model_parameters = copy.deepcopy(model.state_dict())
-                pickle.dump(model_parameters, open('pickle/model_parameters_{}.pkl'.format(epoch), 'wb'))
+            # if (epoch + 1) % 200 == 0:
+            #     model_parameters = copy.deepcopy(model.state_dict())
+            #     pickle.dump(model_parameters, open('pickle/model_parameters_{}.pkl'.format(epoch), 'wb'))
 
             with open('model_values/loss_value_while_running.txt', 'a') as f:
                 f.write('Epoch: {} \n'.format(epoch))
@@ -466,12 +470,14 @@ class Drug_sensitivity_single_cell:
             # decay the learning rate
             decay_learning_rate.step()
 
+            pickle.dump(results, open('pickle/Training_Validation_results.pkl', 'wb'))
+
             if n_epochs_not_getting_better >= epoch_stop and best_epoch != 0:
                 create_report(self.filename_report, ['\nWarning!!! Training stopped because the loss was not improving.'])
                 break
 
         # Saving the results
-        results = pd.DataFrame.from_dict((loss_values_training, loss_values_validation, learning_rates, times_training, times_validation)).T
+        results = pd.DataFrame.from_dict(results)
         results.columns = ['Loss_Training', 'Loss_Validation', 'Learning_rates', 'Duration_Training', 'Duration_Validation']
         results.reset_index().to_csv('Training_Validation_results.txt', header=True, index=False)
 
@@ -490,10 +496,33 @@ class Drug_sensitivity_single_cell:
 
     # --------------------------------------------------
 
-    def train_model(self, model, pancancer_bottlenecks, prism_bottlenecks, train_set_index, validation_set_index):
+    def __train_validation_rf(self, model, pancancer_bottlenecks, prism_bottlenecks, train_set_index):
+        for i in range(0, len(train_set_index), self.size_batch):
+            X_train = []
+            y_real = []
+            for index in train_set_index[i:int(i + self.size_batch)]:
+                ccle, screen, sens = self.new_indexes2barcode_screen[index]
+                barcode = np.random.choice(list(ccle[1].keys()), 1)
+                X_train.append(np.concatenate((pancancer_bottlenecks[ccle[1][barcode[0]]], prism_bottlenecks[screen[1]]), axis=None))
+                y_real.append([sens])
+                self.train_barcodes.append(barcode[0])
+
+            model.fit(np.array(X_train), np.array(y_real))
+
+        # y_pred = model.predict(X_train)
+        #
+        # with open('pickle/train_output.txt', 'w') as f:
+        #     f.write('\n'.join(['{:f}'.format(x) for x in y_pred.tolist()]))
+
+        return model
+    # --------------------------------------------------
+
+    def train_model(self, model, pancancer_bottlenecks, prism_bottlenecks, train_set_index, validation_set_index = []):
         start_training = time.time()
         if self.model_architecture == 'NNet':
             model = self.__train_validation_nnet(model, pancancer_bottlenecks, prism_bottlenecks, train_set_index, validation_set_index)
+        else:
+            model = self.__train_validation_rf(model, pancancer_bottlenecks, prism_bottlenecks, train_set_index)
         end_training = time.time()
         create_report(self.filename_report, ['Duration: {:.2f} \n'.format(end_training - start_training)])
         self.__save_model(model)
@@ -558,9 +587,44 @@ class Drug_sensitivity_single_cell:
 
     # --------------------------------------------------
 
+    def __run_test_set_rf(self, model, pancancer_bottlenecks, prism_bottlenecks, test_set_index):
+        X_test = []
+        y_real = []
+        for index in test_set_index:
+            ccle, screen, sens = self.new_indexes2barcode_screen[index]
+            barcode = np.random.choice(list(ccle[1].keys()), 1)
+            X_test.append(np.concatenate((pancancer_bottlenecks[ccle[1][barcode[0]]], prism_bottlenecks[screen[1]]), axis=None))
+            y_real.append([sens])
+            self.test_barcodes.append(barcode[0])
+
+        y_pred = model.predict(np.array(X_test))
+
+        del X_test
+        gc.collect()
+
+        with open('pickle/test_output.txt', 'w') as f:
+            f.write('\n'.join(['{:f}'.format(x) for x in y_pred.tolist()]))
+
+        mse = mean_squared_error(np.array(y_real), y_pred)
+        print('Mean squared error: {:.2f}'.format(mse))
+
+        corr_value, _ = pearsonr(np.array(y_real), y_pred)
+        make_correlation_plot(np.array(y_real), y_pred, test_set_index, 'Test_set')
+
+        lines = ['\n \nTesting loss: {:.2f}'.format(mse),
+                 'Testing correlation: {:.2f}'.format(corr_value),
+                 '\n']
+        create_report(self.filename_report, lines)
+
+        return y_pred.tolist()
+
+    # --------------------------------------------------
+
     def run_test_set(self, model, pancancer_bottlenecks, prism_bottlenecks, test_set_index):
         if self.model_architecture == 'NNet':
             self.__run_test_set_nnet(model, pancancer_bottlenecks, prism_bottlenecks, test_set_index)
+        else:
+            self.__run_test_set_rf(model, pancancer_bottlenecks, prism_bottlenecks, test_set_index)
 
     # --------------------------------------------------
 
@@ -714,12 +778,117 @@ def run_drug_prediction(list_parameters):
     print('Done!')
 
 
+def resume_drug_prediction(list_parameters):
+    pass
+    # start_run = time.time()
+    # print(str(datetime.datetime.now().time()))
+    # drug_sens = Drug_sensitivity_single_cell()
+    #
+    # # filename for the reports
+    # filename = drug_sens.create_filename(list_parameters)
+    # with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/run.txt', 'a') as f:
+    #     f.write(filename)
+    #     f.write('\n')
+    # drug_sens.set_parameters(list_parameters)
+    #
+    # model_architecture = drug_sens.get_model_architecture()
+    # size_batch = drug_sens.get_size_batch()
+    #
+    # # get the indexes
+    # train_set_index, validation_set_index, test_set_index = drug_sens.get_indexes()
+    #
+    # # load and process the datasets
+    # pancancer_bottlenecks = pd.read_csv(
+    #     '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/single_cell/pancancer_with_alpha_outputs.csv',
+    #     header=0, index_col=0)
+    # prism_bottlenecks = pd.read_csv(
+    #     '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/molecular/run_once/prism_bottlenecks.csv',
+    #     header=0, index_col=0)
+    # n_genes = int(pancancer_bottlenecks.shape[1] + prism_bottlenecks.shape[1])
+    # pancancer_bottlenecks.index.name = 'barcode'
+    # prism_bottlenecks.index.name = 'screen'
+    # pancancer_bottlenecks = pancancer_bottlenecks.to_numpy()
+    # prism_bottlenecks = prism_bottlenecks.to_numpy()
+    #
+    # # start the Drug Sensitivity model
+    # if model_architecture == 'NNet':
+    #     model = drug_sens.initialize_model(size_input=n_genes)
+    # else:
+    #     model = drug_sens.initialize_model(size_input=[])
+    #
+    # # train the model
+    # model_trained = drug_sens.train_model(model, pancancer_bottlenecks, prism_bottlenecks, train_set_index,
+    #                                       validation_set_index)
+    #
+    # drug_sens.run_test_set(model_trained, pancancer_bottlenecks, prism_bottlenecks, test_set_index)
+    #
+    # # add the predicted values to the final dataset
+    # drug_sens.save_dataset(train_set_index, 'Train')
+    # drug_sens.save_dataset(validation_set_index, 'Validation')
+    # drug_sens.save_dataset(test_set_index, 'Test')
+    #
+    # # plots
+    # if model_architecture == 'NNet':
+    #     results = pd.read_csv('Training_Validation_results.txt', header=0, index_col=0)
+    #     drug_sens.plot_loss_lr(list(list(results.index)), list(results['Loss_Training']),
+    #                            list(results['Loss_Validation']), list(results['Learning_rates']))
+    #
+    #     results_barplots = results.loc[results.index % 10 == 0]
+    #     results_barplots.loc[:, ['Duration_Training', 'Duration_Validation']].plot(kind='bar', rot=0, subplots=True,
+    #                                                                                figsize=(16, 8))
+    #     plt.savefig('plots/Duration_per_epoch.png', bbox_inches='tight')
+    #
+    #     free_memory = [results_barplots, results]
+    #     for item in free_memory:
+    #         del item
+    #     gc.collect()
+    #
+    # # correlation matrices
+    # type_data = ['Train', 'Validation', 'Test']
+    #
+    # for i in range(len(type_data)):
+    #     with open('pickle/{}_output.txt'.format(type_data[i]), 'r') as f:
+    #         predictions = f.readlines()
+    #     with open('pickle/{}_set_real_values.txt'.format(type_data[i]), 'r') as f:
+    #         real_values = f.readlines()
+    #     predictions = np.array([float(x.strip('\n')) for x in predictions])
+    #     real_values = np.array([float(x.strip('\n')) for x in real_values])
+    #     if type_data[i] == 'Validation':
+    #         plot_name = '{}_set'.format(type_data[i])
+    #         lines = ['\n{} real values max: {:.2f}'.format(type_data[i], real_values.max()),
+    #                  '{} real values min: {:.2f}'.format(type_data[i], real_values.min()),
+    #                  '{} predicted values max: {:.2f}'.format(type_data[i], predictions.max()),
+    #                  '{} predicted values min: {:.2f}'.format(type_data[i], predictions.min())]
+    #     else:
+    #         plot_name = '{}ing_set'.format(type_data[i])
+    #         lines = ['\n{}ing real values max: {:.2f}'.format(type_data[i], real_values.max()),
+    #                  '{}ing real values min: {:.2f}'.format(type_data[i], real_values.min()),
+    #                  '{}ing predicted values max: {:.2f}'.format(type_data[i], predictions.max()),
+    #                  '{}ing predicted values min: {:.2f}'.format(type_data[i], predictions.min())]
+    #     corr_value, _ = pearsonr(real_values, predictions)
+    #     make_correlation_plot(real_values, predictions, plot_name)
+    #     if type_data[i] == 'Validation':
+    #         lines.extend(['\n{} correlation: {}'.format(type_data[i], corr_value), '\n'])
+    #     else:
+    #         lines.extend(['\n{}ing correlation: {}'.format(type_data[i], corr_value), '\n'])
+    #     create_report(filename, lines)
+    #
+    # end_run = time.time()
+    # create_report(filename, ['\nTime for run: {:.2f}'.format(end_run - start_run)])
+    # print('Done!')
+
 # -------------------------------------------------- INPUT --------------------------------------------------
 
 try:
-    input_values = sys.argv[1:]
+    run_type = sys.argv[1]
+    input_values = sys.argv[2:]
     print(input_values)
-    run_drug_prediction(input_values)
+    if run_type == 'start':
+        run_drug_prediction(input_values)
+    elif run_type == 'resume':
+        resume_drug_prediction(input_values)
+    else:
+        print('WARNING: Type of run invalid! Please check.')
 
 except EOFError:
     print('ERROR!')
