@@ -109,6 +109,7 @@ def create_prism_bottleneck_run_secondary():
     drug_sensitivity = drug_sensitivity.loc[:,['broad_id', 'smiles']]
     drug_sensitivity.drop_duplicates(inplace = True)
     drug_sensitivity.set_index('broad_id')
+    print(drug_sensitivity.shape)
 
     mols = []
     mol_indexes = []

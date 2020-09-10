@@ -23,3 +23,6 @@ new_results/
 data_secondary/
 e_sec.log
 o_sec.log
+e_prim.log
+o_prim.log
+old_results/

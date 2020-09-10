@@ -64,7 +64,7 @@ class Process_dataset_pancancer():
         
     def load_prism(self, maximum_length_smiles):
         #rows: ACH-000001 ; columns: BRD-A00077618-236-07-6::2.5::HTS
-        prism_matrix = pd.read_csv('{}/Prism_19Q4_secondary/secondary-screen-dose-response-curve-parameters.csv'.format(path_data), header=0, nrows = 200, usecols= ['broad_id', 'depmap_id', 'ccle_name', 'screen_id', 'auc', 'name', 'moa', 'target', 'smiles', 'passed_str_profiling'])
+        prism_matrix = pd.read_csv('{}/Prism_19Q4_secondary/secondary-screen-dose-response-curve-parameters.csv'.format(path_data), header=0, usecols= ['broad_id', 'depmap_id', 'ccle_name', 'screen_id', 'auc', 'name', 'moa', 'target', 'smiles', 'passed_str_profiling'])
         print('\n PRISM dataset (after loading)')
         print(prism_matrix.shape)
         
@@ -140,12 +140,12 @@ class Process_dataset_pancancer():
             barcodes = {x : pancancer_bottlenecks.index.get_loc(x) for x in barcodes} #for each barcode returns its index
             indexes = []
             prism_subset = prism_dataset.loc[prism_dataset['ccle_name'] == ccle]
-            prism_subset = prism_subset.loc[prism_subset['board_id'].isin(screens_list)]
+            prism_subset = prism_subset.loc[prism_subset.index.isin(screens_list)]
             for j in range(prism_subset.shape[0]):
-                screen = prism_subset['board_id'].iloc[j]
+                screen = prism_subset.iloc[j].name
                 screen_i = prism_bottlenecks.index.get_loc(screen)
                 index = prism_subset.iloc[j].name
-                sens_value = prism_subset['auc'].loc[j]
+                sens_value = prism_subset['auc'].iloc[j]
                 new_indexes_dict[index] = ((ccle, barcodes), (screen, screen_i), sens_value)
                 indexes.append(index)
             barcode2indexes[ccle] = indexes
