@@ -345,11 +345,6 @@ class Drug_sensitivity_single_cell:
             if x not in seeds:
                 seeds.append(x)
 
-        optimizer = optim.Adam(model.parameters(), lr=self.learning_rate)
-        best_model = copy.deepcopy(model.state_dict())  # save the best model yet with the best accuracy and lower loss value
-        decay_learning_rate = lr_scheduler.StepLR(optimizer, step_size=self.step_size, gamma=self.gamma)
-        epoch_stop = 80
-
         if self.run_type == 'start':
             n_epochs_not_getting_better = 0
             best_epoch = None
@@ -360,13 +355,18 @@ class Drug_sensitivity_single_cell:
                        'times_validation':{}}
             start_point = 0
         elif self.run_type == 'resume':
-            path_values_folder = self.filename_report.strip('output_').strip('.txt')
-            values = open('{}/model_values/loss_value_while_running.txt'.format(path_values_folder), 'r')
-            results = pickle.load(open('{}/pickle/Training_Validation_results.pkl'.format(path_values_folder), 'r'))
+            values = open('model_values/loss_value_while_running.txt', 'r')
+            results = pickle.load(open('pickle/Training_Validation_results.pkl', 'r'))
             values = values.readlines()
             values = values[-8:]
             start_point = int(values[0].strip('\n').split(' ')[-1])
             n_epochs_not_getting_better = int(values[-2].strip('\n').split(' ')[-2])
+            model = self.load_model(model)
+
+        optimizer = optim.Adam(model.parameters(), lr=self.learning_rate)
+        best_model = copy.deepcopy(model.state_dict())  # save the best model yet with the best accuracy and lower loss value
+        decay_learning_rate = lr_scheduler.StepLR(optimizer, step_size=self.step_size, gamma=self.gamma)
+        epoch_stop = 80
 
         # Training and Validation
         for epoch in range(start_point, self.n_epochs):
@@ -687,23 +687,33 @@ class Drug_sensitivity_single_cell:
 
 # -------------------------------------------------- RUN --------------------------------------------------
 
-def run_drug_prediction(list_parameters):
+def run_drug_prediction(list_parameters, run_type):
     start_run = time.time()
     print(str(datetime.datetime.now().time()))
     drug_sens = Drug_sensitivity_single_cell()
 
-    #filename for the reports
     filename = drug_sens.create_filename(list_parameters)
-    with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/run.txt', 'a') as f:
-            f.write(filename)
-            f.write('\n')
     drug_sens.set_parameters(list_parameters)
-
     model_architecture = drug_sens.get_model_architecture()
     path_data = drug_sens.get_path_data()
 
-    #get the indexes
-    train_set_index, validation_set_index, test_set_index = drug_sens.get_indexes()
+    if run_type == 'start':
+        with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/run.txt', 'a') as f:
+            f.write(filename)
+            f.write('\n')
+        train_set_index, validation_set_index, test_set_index = drug_sens.get_indexes()
+
+    elif run_type == 'resume':
+        path_folder = filename.strip('output_').strip('.txt')
+        with open('{}/pickle/Train_set_index.txt'.format(path_folder), 'r') as f:
+            train_set_index = f.readlines()
+            train_set_index = [x.strip('\n') for x in train_set_index]
+        with open('{}/pickle/Validation_set_index.txt'.format(path_folder), 'w') as f:
+            validation_set_index = f.readlines()
+            validation_set_index = [x.strip('\n') for x in validation_set_index]
+        with open('{}/pickle/Test_set_index.txt'.format(path_folder), 'w') as f:
+            test_set_index = f.readlines()
+            test_set_index = [x.strip('\n') for x in test_set_index]
 
     #load and process the datasets
     pancancer_bottlenecks = pd.read_csv('{}/single_cell/pancancer_with_alpha_outputs.csv'.format(path_data), header = 0, index_col = 0)
@@ -781,22 +791,12 @@ def run_drug_prediction(list_parameters):
     create_report(filename, ['\nTime for run: {:.2f}'.format(end_run - start_run)])
     print('Done!')
 
-
-def resume_drug_prediction(list_parameters):
-    pass
-
 # -------------------------------------------------- INPUT --------------------------------------------------
 
 try:
     input_values = sys.argv[1:]
     run_type = input_values[-1]
-    print(input_values)
-    if run_type == 'start':
-        run_drug_prediction(input_values)
-    elif run_type == 'resume':
-        resume_drug_prediction(input_values)
-    else:
-        print('WARNING: Type of run invalid! Please check.')
+    run_drug_prediction(input_values, run_type)
 
 except EOFError:
     print('ERROR!')
