@@ -284,7 +284,7 @@ class Process_dataset_pancancer():
         with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/prism_pancancer/prism_pancancer_screens_once.txt', 'w') as f:
             f.write('\n'.join(list(list_indexes_prism)))
         
-        pancancer_bottlenecks, _ = create_pancancer_bottleneck()
+        pancancer_bottlenecks, _ = create_pancancer_bottleneck('{}/data'.format(path_results))
         #create the integrate files
 
         self.create_integrated_datasets(list_indexes_prism, prism_matrix, prism_bottlenecks, pancancer_bottlenecks, pancancer_metadata, 'once')

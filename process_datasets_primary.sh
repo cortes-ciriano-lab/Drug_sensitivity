@@ -24,4 +24,4 @@ mkdir -p data/prism_pancancer/csv_files
 mkdir -p data/prism_pancancer/csv_files/once
 
 
-bsub -P gpu -gpu - -M 40G -e e_prim.log -o o_prim.log -J prism_prim "python /hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/py_scripts/process_datasets.py pancancer"
+bsub -P gpu -gpu - -M 40G -e e_prim.log -o o_prim.log -J prism_prim "python /hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/py_scripts/process_datasets_primary.py pancancer"

@@ -106,10 +106,6 @@ def create_prism_bottleneck_run_secondary():
     maximum_length_smiles = int(molecules.get_maximum_length())
 
     drug_sensitivity = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/pkl_files/prism_dataset.pkl', 'rb'))
-    drug_sensitivity = drug_sensitivity.loc[:,['broad_id', 'smiles']]
-    drug_sensitivity.drop_duplicates(inplace = True)
-    drug_sensitivity.set_index('broad_id')
-    print(drug_sensitivity.shape)
 
     mols = []
     mol_indexes = []
@@ -165,7 +161,6 @@ def create_prism_bottleneck_run_secondary():
 
     mol_bottlenecks = pd.DataFrame(mol_predictions[1])
     mol_bottlenecks.index = list(mol_indexes)
-    list_indexes = list(mol_bottlenecks.index)
 
     print('PRISM BOTTLENECK \n', mol_bottlenecks.shape)
 
@@ -173,7 +168,7 @@ def create_prism_bottleneck_run_secondary():
     mol_bottlenecks.reset_index().to_csv('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/molecular/run_once/prism_bottlenecks.csv', header=True, index=False)
 
     mol_bottlenecks.set_index(list(mol_bottlenecks.columns)[0])
-    return mol_bottlenecks, list_indexes
+    return mol_bottlenecks, mol_indexes
 
 def create_prism_bottleneck_only_valids(times):
     ohf = OneHotFeaturizer()

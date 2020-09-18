@@ -1,7 +1,7 @@
 #!/bin/bash
 
 rm e_sec.log o_sec.log invalid_smiles.txt
-rm -r data_secondary
+#rm -r data_secondary
 
 mkdir -p data_secondary/
 mkdir -p data_secondary/molecular/

@@ -134,21 +134,30 @@ class Process_dataset_pancancer():
     def create_integrated_datasets(self, screens_list, prism_dataset, prism_bottlenecks, pancancer_bottlenecks, pancancer_metadata):
         barcode2indexes = {}
         new_indexes_dict = {}
+        total = 0
+        screens_prism2bottlenecks = {}
+        for full_index in screens_list:
+            screen = full_index.split(':::')[0]
+            if screen not in screens_prism2bottlenecks.keys():
+                screens_prism2bottlenecks[screen] = []
+            screens_prism2bottlenecks[screen].append(full_index)
 
         for ccle in pancancer_metadata['Cell_line'].unique():
             barcodes = list(pancancer_metadata.loc[pancancer_metadata['Cell_line'] == ccle].index)
             barcodes = {x : pancancer_bottlenecks.index.get_loc(x) for x in barcodes} #for each barcode returns its index
             indexes = []
             prism_subset = prism_dataset.loc[prism_dataset['ccle_name'] == ccle]
-            prism_subset = prism_subset.loc[prism_subset.index.isin(screens_list)]
+            prism_subset = prism_subset.loc[prism_subset.index.isin(list(screens_prism2bottlenecks.keys()))]
             for j in range(prism_subset.shape[0]):
                 screen = prism_subset.iloc[j].name
-                screen_i = prism_bottlenecks.index.get_loc(screen)
-                index = prism_subset.iloc[j].name
-                sens_value = prism_subset['auc'].iloc[j]
-                new_indexes_dict[index] = ((ccle, barcodes), (screen, screen_i), sens_value)
-                indexes.append(index)
+                for full_index in screens_prism2bottlenecks[screen]:
+                    screen_i = prism_bottlenecks.index.get_loc(full_index)
+                    sens_value = prism_subset['auc'].iloc[j]
+                    new_indexes_dict[full_index] = ((ccle, barcodes), (screen, screen_i), sens_value)
+                    indexes.append(full_index)
+                    total += 1
             barcode2indexes[ccle] = indexes
+        print('Total indexes: {}'.format(total))
 
         pickle.dump(barcode2indexes, open('{}/data_secondary/prism_pancancer/prism_pancancer_new_indexes_dict.pkl'.format(path_results), 'wb'))
         pickle.dump(new_indexes_dict, open('{}/data_secondary/prism_pancancer/prism_pancancer_new_indexes_newIndex2barcodeScreen_dict.pkl'.format(path_results), 'wb'))
@@ -157,7 +166,7 @@ class Process_dataset_pancancer():
     
     def run(self):
         #initialize the molecular model
-        molecules = Molecular()
+        '''molecules = Molecular()
         molecules.set_filename_report('/data_secondary/molecular/run_once/molecular_output2.txt'.format(path_results))
         _ = molecules.start_molecular()
         maximum_length_smiles = int(molecules.get_maximum_length())
@@ -227,8 +236,14 @@ class Process_dataset_pancancer():
         with open('{}/data_secondary/prism_pancancer/prism_pancancer_screens.txt'.format(path_results), 'w') as f:
             f.write('\n'.join(list(list_indexes_prism)))
         
-        pancancer_bottlenecks, _ = create_pancancer_bottleneck()
-
+        pancancer_bottlenecks, _ = create_pancancer_bottleneck('{}/data_secondary'.format(path_results))
+        '''
+        prism_bottlenecks = pickle.load(open('{}/data_secondary/molecular/run_once/pkl_files/prism_bottlenecks.pkl'.format(path_results), 'rb'))
+        list_indexes_prism = list(prism_bottlenecks.index)
+        prism_matrix = pickle.load(open('{}/data_secondary/pkl_files/prism_dataset.pkl'.format(path_results), 'rb'))
+        pancancer_bottlenecks = pickle.load(open('{}/data_secondary/single_cell/pancancer_with_alpha_bottlenecks.pkl'.format(path_results), 'rb'))
+        pancancer_metadata = pickle.load(open('{}/data_secondary/pkl_files/pancancer_metadata.pkl'.format(path_results), 'rb'))
+        
         #create the integrate files
         self.create_integrated_datasets(list_indexes_prism, prism_matrix, prism_bottlenecks, pancancer_bottlenecks, pancancer_metadata)
         

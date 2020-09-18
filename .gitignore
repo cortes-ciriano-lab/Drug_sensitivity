@@ -26,3 +26,10 @@ o_sec.log
 e_prim.log
 o_prim.log
 old_results/
+check_cases_single_cell.txt
+jobs_resumed.pkl
+jobs_to_resume.txt
+just_in_case/
+loss_results_single_cell_pancancer.txt
+summary_results.csv
+test.txt
