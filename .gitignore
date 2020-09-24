@@ -1,8 +1,6 @@
 do_not_delete_old_data/
-e.log
 just_in_case_py/
 list_original_parameters_single_cell_pancancer.txt
-o.log
 results/
 py_scripts/__pycache__/
 trained_models/
@@ -13,18 +11,12 @@ data
 check_cases.txt
 list_best_parameters_pancancer.txt
 loss_results_pancancer.txt
-e_parse.log
-o_parse.log
 5K_results
 delete.txt
 smaller_dataset_results/
 run.txt
 new_results/
 data_secondary/
-e_sec.log
-o_sec.log
-e_prim.log
-o_prim.log
 old_results/
 check_cases_single_cell.txt
 jobs_resumed.pkl
@@ -33,3 +25,4 @@ just_in_case/
 loss_results_single_cell_pancancer.txt
 summary_results.csv
 test.txt
+*.log

@@ -1,10 +1,10 @@
 #!/bin/bash
 
-bgadd -L 5 /drug_resume
+#bgadd -L 5 /drug_resume
 
 #NNet
 run_type="resume"
-more_epoch="400"
+more_epoch="1000"
 for jobs in `cat jobs_to_resume.txt` ; do
     echo "${jobs}"
     arrJ=(${jobs//// })

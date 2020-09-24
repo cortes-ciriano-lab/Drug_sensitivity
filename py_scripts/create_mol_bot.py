@@ -95,17 +95,17 @@ def create_prism_bottleneck_run_once():
     mol_bottlenecks.set_index(list(mol_bottlenecks.columns)[0])
     return mol_bottlenecks, list_indexes
 
-def create_prism_bottleneck_run_secondary():
+def create_prism_bottleneck_run_secondary(values_from):
     ohf = OneHotFeaturizer()
 
     # initialize the single cell model
     print('Molecular model: started \n ')
     molecules = Molecular()
-    molecules.set_filename_report('/data_secondary/molecular/run_once/molecular_output_secondary.txt')
+    molecules.set_filename_report('/data_secondary/{}/molecular/run_once/molecular_output_secondary.txt'.format(values_from))
     mol_model = molecules.start_molecular()
     maximum_length_smiles = int(molecules.get_maximum_length())
 
-    drug_sensitivity = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/pkl_files/prism_dataset.pkl', 'rb'))
+    drug_sensitivity = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/{}/pkl_files/prism_dataset.pkl'.format(values_from), 'rb'))
 
     mols = []
     mol_indexes = []
@@ -135,9 +135,9 @@ def create_prism_bottleneck_run_secondary():
         index = mol_indexes[i]
         smile = mols[i]
         fp = fingerprints[i]
-        with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/molecular/prism_indexes_smiles.txt', 'a') as f:
+        with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/{}/molecular/prism_indexes_smiles.txt'.format(values_from), 'a') as f:
             f.write('{}, {}\n'.format(index, smile))
-        with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/molecular/prism_indexes_morgan_fingerprints.txt', 'a') as f:
+        with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/{}/molecular/prism_indexes_morgan_fingerprints.txt'.format(values_from), 'a') as f:
             f.write('{}, {}\n'.format(index, fp))
 
     mols = ohf.featurize(mols, maximum_length_smiles)
@@ -154,7 +154,7 @@ def create_prism_bottleneck_run_secondary():
     mol_outputs = {}
     for i in range(len(mol_predictions[0])):
         mol_outputs[mol_indexes[i]] = mol_predictions[0][i]
-    pickle.dump(mol_outputs, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/molecular/run_once/pkl_files/prism_outputs.pkl', 'wb'), protocol=4)
+    pickle.dump(mol_outputs, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/{}/molecular/run_once/pkl_files/prism_outputs.pkl'.format(values_from), 'wb'), protocol=4)
 
     del mol_outputs
     gc.collect()
@@ -164,8 +164,8 @@ def create_prism_bottleneck_run_secondary():
 
     print('PRISM BOTTLENECK \n', mol_bottlenecks.shape)
 
-    pickle.dump(mol_bottlenecks, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/molecular/run_once/pkl_files/prism_bottlenecks.pkl', 'wb'), protocol=4)
-    mol_bottlenecks.reset_index().to_csv('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/molecular/run_once/prism_bottlenecks.csv', header=True, index=False)
+    pickle.dump(mol_bottlenecks, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/{}/molecular/run_once/pkl_files/prism_bottlenecks.pkl'.format(values_from), 'wb'), protocol=4)
+    mol_bottlenecks.reset_index().to_csv('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/{}/molecular/run_once/prism_bottlenecks.csv'.format(values_from), header=True, index=False)
 
     mol_bottlenecks.set_index(list(mol_bottlenecks.columns)[0])
     return mol_bottlenecks, mol_indexes

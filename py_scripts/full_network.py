@@ -23,7 +23,7 @@ class NN_drug_sensitivity(nn.Module):
         layers.insert(0, self.size_input)
         self.layers = []
         i = 0
-        while i < len(layers) and (i+1) < len(layers):
+        while (i+1) < len(layers):
             self.layers.append([layers[i],layers[i+1]])
             i += 1
         self.dropout_prob = float(kwargs['dropout_prob'])

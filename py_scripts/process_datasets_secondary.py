@@ -23,16 +23,15 @@ np.random.seed(seed)
 
 path_data = '/hps/research1/icortes/acunha/data/'
 # path_data = 'C:/Users/abeat/Dropbox/data'
-#
-path_results = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/' #cluster
-# path_results = 'C:/Users/abeat/Documents/GitHub/Drug_sensitivity/'
 
 # -------------------------------------------------- PROCESS DATASETS --------------------------------------------------
 class Process_dataset_pancancer():
     
-    def __init__(self, **kwargs):
+    def __init__(self):
         self.barcodes_per_cell_line = {}
         self.ohf = OneHotFeaturizer()
+        self.path_results = None
+        self.values_from = None
     
     # --------------------------------------------------
     
@@ -64,13 +63,13 @@ class Process_dataset_pancancer():
         
     def load_prism(self, maximum_length_smiles):
         #rows: ACH-000001 ; columns: BRD-A00077618-236-07-6::2.5::HTS
-        prism_matrix = pd.read_csv('{}/Prism_19Q4_secondary/secondary-screen-dose-response-curve-parameters.csv'.format(path_data), header=0, usecols= ['broad_id', 'depmap_id', 'ccle_name', 'screen_id', 'auc', 'name', 'moa', 'target', 'smiles', 'passed_str_profiling'])
+        prism_matrix = pd.read_csv('{}/Prism_19Q4_secondary/secondary-screen-dose-response-curve-parameters.csv'.format(path_data), header=0, usecols= ['broad_id', 'depmap_id', 'ccle_name', 'screen_id', 'auc', 'ic50', 'name', 'moa', 'target', 'smiles', 'passed_str_profiling'])
         print('\n PRISM dataset (after loading)')
         print(prism_matrix.shape)
         
         #filter the smiles - drop nan values (1), that has passed_str_profiling TRUE (2), standardise the smiles (3) and check if the standardised smile is compatible with the molecular VAE (4)
         prism_matrix = prism_matrix.loc[prism_matrix['passed_str_profiling']]
-        prism_matrix.dropna(subset=['smiles', 'auc'], inplace=True) # (1) - only keep data with smiles and valid auc values
+        prism_matrix.dropna(subset=['smiles', self.values_from], inplace=True) # (1) - only keep data with smiles and valid auc/ic50 values
         
         for i in range(len(prism_matrix['smiles'])):
             smile = prism_matrix['smiles'].iloc[i]
@@ -152,22 +151,39 @@ class Process_dataset_pancancer():
                 screen = prism_subset.iloc[j].name
                 for full_index in screens_prism2bottlenecks[screen]:
                     screen_i = prism_bottlenecks.index.get_loc(full_index)
-                    sens_value = prism_subset['auc'].iloc[j]
-                    new_indexes_dict[full_index] = ((ccle, barcodes), (screen, screen_i), sens_value)
-                    indexes.append(full_index)
-                    total += 1
+                    sens_value = prism_subset[self.values_from].iloc[j]
+                    if self.values_from == 'ic50':
+                        if sens_value >= 0.000610352 and sens_value <= 10:
+                            sens_value = -np.log10(sens_value * 10**(-6))
+                            new_indexes_dict[full_index] = ((ccle, barcodes), (screen, screen_i), sens_value)
+                            indexes.append(full_index)
+                            total += 1
+                    else:
+                        new_indexes_dict[full_index] = ((ccle, barcodes), (screen, screen_i), sens_value)
+                        indexes.append(full_index)
+                        total += 1
             barcode2indexes[ccle] = indexes
         print('Total indexes: {}'.format(total))
-
-        pickle.dump(barcode2indexes, open('{}/data_secondary/prism_pancancer/prism_pancancer_new_indexes_dict.pkl'.format(path_results), 'wb'))
-        pickle.dump(new_indexes_dict, open('{}/data_secondary/prism_pancancer/prism_pancancer_new_indexes_newIndex2barcodeScreen_dict.pkl'.format(path_results), 'wb'))
+ 
+        pickle.dump(barcode2indexes, open('{}/prism_pancancer/prism_pancancer_new_indexes_dict.pkl'.format(self.path_results), 'wb'))
+        pickle.dump(new_indexes_dict, open('{}/prism_pancancer/prism_pancancer_new_indexes_newIndex2barcodeScreen_dict.pkl'.format(self.path_results), 'wb'))
 
     # --------------------------------------------------
     
-    def run(self):
+    def define_path_results(self, values_from):
+        self.values_from = values_from
+        self.path_results = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/{}'.format(values_from) #cluster
+        # self.path_results = 'C:/Users/abeat/Documents/GitHub/Drug_sensitivity/data_secondary/{}'.format(values_from)
+    
+    # --------------------------------------------------
+    
+    def run(self, values_from):
+        self.define_path_results(values_from)
+        
+        '''
         #initialize the molecular model
-        '''molecules = Molecular()
-        molecules.set_filename_report('/data_secondary/molecular/run_once/molecular_output2.txt'.format(path_results))
+        molecules = Molecular()
+        molecules.set_filename_report('data_secondary/{}/molecular/run_once/molecular_output2.txt'.format(values_from))
         _ = molecules.start_molecular()
         maximum_length_smiles = int(molecules.get_maximum_length())
         
@@ -194,14 +210,14 @@ class Process_dataset_pancancer():
         
         list_cell_lines_prism = list(prism_matrix['ccle_name'].unique())
         
-        with open('{}/data_secondary/prism_pancancer/prism_pancancer_cell_lines_depmap.txt'.format(path_results), 'w') as f:
+        with open('{}/prism_pancancer/prism_pancancer_cell_lines_depmap.txt'.format(self.path_results), 'w') as f:
             f.write('\n'.join(list_cell_lines_prism))
-        with open('{}/data_secondary/prism_pancancer/prism_pancancer_cell_lines_pancancer.txt'.format(path_results), 'w') as f:
+        with open('{}/prism_pancancer/prism_pancancer_cell_lines_pancancer.txt'.format(self.path_results), 'w') as f:
             f.write('\n'.join(list(pancancer_metadata['Cell_line'].unique())))
         pancancer_tumours = list(pancancer_metadata['Cancer_type'].unique())
-        with open('{}/data_secondary/prism_pancancer/prism_pancancer_tumours.txt'.format(path_results), 'w') as f:
+        with open('{}/prism_pancancer/prism_pancancer_tumours.txt'.format(self.path_results), 'w') as f:
             f.write('\n'.join(pancancer_tumours))
-        with open('{}/data_secondary/prism_pancancer/prism_pancancer_barcodes_sc.txt'.format(path_results), 'w') as f:
+        with open('{}/prism_pancancer/prism_pancancer_barcodes_sc.txt'.format(self.path_results), 'w') as f:
             f.write('\n'.join(list(pancancer_data.index)))
 
         list_index = []
@@ -209,10 +225,10 @@ class Process_dataset_pancancer():
             list_index.append("{}::{}::{}".format(prism_matrix['ccle_name'].iloc[i], prism_matrix['broad_id'].iloc[i], prism_matrix['screen_id'].iloc[i]))
         prism_matrix.index = list_index
 
-        pickle.dump(pancancer_data, open('{}/data_secondary/pkl_files/pancancer_dataset.pkl'.format(path_results), 'wb'), protocol = 4)
-        pickle.dump(prism_matrix, open('{}/data_secondary/pkl_files/prism_dataset.pkl'.format(path_results), 'wb'), protocol = 4)
-        pickle.dump(pancancer_metadata, open('{}/data_secondary/pkl_files/pancancer_metadata.pkl'.format(path_results), 'wb'))
-        prism_matrix.reset_index().to_csv('{}/data_secondary/prism_dataset.csv'.format(path_results), header=True, index=False)
+        pickle.dump(pancancer_data, open('{}/pkl_files/pancancer_dataset.pkl'.format(self.path_results), 'wb'), protocol = 4)
+        pickle.dump(prism_matrix, open('{}/pkl_files/prism_dataset.pkl'.format(self.path_results), 'wb'), protocol = 4)
+        pickle.dump(pancancer_metadata, open('{}/pkl_files/pancancer_metadata.pkl'.format(self.path_results), 'wb'))
+        prism_matrix.reset_index().to_csv('{}/prism_dataset.csv'.format(self.path_results), header=True, index=False)
 
         del pancancer_data
         gc.collect()
@@ -227,22 +243,22 @@ class Process_dataset_pancancer():
             for i in v:
                 ccle_per_barcode[i] = k
                 
-        pickle.dump(barcodes_per_tumour, open('{}/data_secondary/prism_pancancer/barcodes_per_tumour_dict.pkl'.format(path_results), 'wb'))
-        pickle.dump(self.barcodes_per_cell_line, open('{}/data_secondary/prism_pancancer/barcodes_per_cell_line_dict.pkl'.format(path_results), 'wb'))
-        pickle.dump(ccle_per_barcode, open('{}/data_secondary/prism_pancancer/ccle_per_barcode_dict.pkl'.format(path_results), 'wb'))
+        pickle.dump(barcodes_per_tumour, open('{}/prism_pancancer/barcodes_per_tumour_dict.pkl'.format(self.path_results), 'wb'))
+        pickle.dump(self.barcodes_per_cell_line, open('{}/prism_pancancer/barcodes_per_cell_line_dict.pkl'.format(self.path_results), 'wb'))
+        pickle.dump(ccle_per_barcode, open('{}/prism_pancancer/ccle_per_barcode_dict.pkl'.format(self.path_results), 'wb'))
         
         # create the bottlenecks
-        prism_bottlenecks, list_indexes_prism = create_prism_bottleneck_run_secondary()
-        with open('{}/data_secondary/prism_pancancer/prism_pancancer_screens.txt'.format(path_results), 'w') as f:
+        prism_bottlenecks, list_indexes_prism = create_prism_bottleneck_run_secondary(values_from)
+        with open('{}/prism_pancancer/prism_pancancer_screens.txt'.format(self.path_results), 'w') as f:
             f.write('\n'.join(list(list_indexes_prism)))
         
-        pancancer_bottlenecks, _ = create_pancancer_bottleneck('{}/data_secondary'.format(path_results))
+        pancancer_bottlenecks, _ = create_pancancer_bottleneck('data_secondary/{}'.format(values_from))
         '''
-        prism_bottlenecks = pickle.load(open('{}/data_secondary/molecular/run_once/pkl_files/prism_bottlenecks.pkl'.format(path_results), 'rb'))
+        prism_bottlenecks = pickle.load(open('{}/molecular/run_once/pkl_files/prism_bottlenecks.pkl'.format(self.path_results), 'rb'))
         list_indexes_prism = list(prism_bottlenecks.index)
-        prism_matrix = pickle.load(open('{}/data_secondary/pkl_files/prism_dataset.pkl'.format(path_results), 'rb'))
-        pancancer_bottlenecks = pickle.load(open('{}/data_secondary/single_cell/pancancer_with_alpha_bottlenecks.pkl'.format(path_results), 'rb'))
-        pancancer_metadata = pickle.load(open('{}/data_secondary/pkl_files/pancancer_metadata.pkl'.format(path_results), 'rb'))
+        prism_matrix = pickle.load(open('{}/pkl_files/prism_dataset.pkl'.format(self.path_results), 'rb'))
+        pancancer_bottlenecks = pickle.load(open('{}/single_cell/pancancer_with_alpha_bottlenecks.pkl'.format(self.path_results), 'rb'))
+        pancancer_metadata = pickle.load(open('{}/pkl_files/pancancer_metadata.pkl'.format(self.path_results), 'rb'))
         
         #create the integrate files
         self.create_integrated_datasets(list_indexes_prism, prism_matrix, prism_bottlenecks, pancancer_bottlenecks, pancancer_metadata)
@@ -253,9 +269,10 @@ class Process_dataset_pancancer():
 
 try:
     sc_from = sys.argv[1]
+    values_from = sys.argv[2]
     if sc_from == 'pancancer':
         process = Process_dataset_pancancer()
-        process.run()
+        process.run(values_from)
 
 except EOFError:
     print('ERROR!')

@@ -16,7 +16,8 @@ loss_params = []
 
 check = []
 type_data = sys.argv[1]
-files = open('loss_results_{}_pancancer.txt'.format(type_data),'r')
+data_from = sys.argv[2]
+files = open('loss_results_{}_{}.txt'.format(type_data, data_from),'r')
 files = files.readlines()
 for file in files:
     values = open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/{}'.format(file.strip('\n')), 'r')
@@ -45,7 +46,7 @@ for file in files:
         
         i+=1
     
-    if validation_loss and training_loss and test_loss and validation_corr and train_corr and test_corr:
+    try:
             validation_loss_total.append(validation_loss)
             train_loss_total.append(training_loss)
             test_loss_total.append(test_loss)
@@ -56,10 +57,10 @@ for file in files:
             
             loss_params.append(file.split('/')[-1])
         
-    else:
+    except:
         check.append(file)
 
-with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/check_cases_{}.txt'.format(type_data), 'w') as f:
+with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/check_cases_{}_{}.txt'.format(type_data, data_from), 'w') as f:
     f.write('\n'.join(check))
 
 d = pd.DataFrame(validation_loss_total, columns = ['Val_loss_total'])
@@ -72,9 +73,14 @@ d['Difference'] = np.abs(d['Train_loss_total'] - d['Val_loss_total'])
 d['Parameters'] = loss_params
 d.dropna(inplace=True)
 d = d.sort_values(['Val_loss_total'])
-d.to_csv('summary_results.csv', header=True, index=False)
+d.to_csv('summary_results_{}_{}.csv'.format(type_data, data_from), header=True, index=False)
 
-best_parameters = d.loc[d['Val_loss_total'] < 0.58]
+indexes_to_keep = []
+for i in list(d.index):
+    # if d['Val_loss_total'].loc[i] < 0.58 or '0.00001' in d['Parameters'].loc[i]:
+    if d['Val_loss_total'].loc[i] <= 0.05:
+        indexes_to_keep.append(i)
+best_parameters = d.loc[indexes_to_keep]
 print(best_parameters)
 
 jobs_already_resumed = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/trained_models/jobs_resumed.pkl', 'rb'))
@@ -83,11 +89,11 @@ for file in list(best_parameters['Parameters']):
     new_file = file.strip('output_')[:-5]
     # new_file = new_file.strip('.txt')
     print(new_file)
-    new_file = 'new_results/{}/pancancer/{}'.format(type_data, new_file)
+    new_file = 'new_results/{}/{}/{}'.format(type_data, data_from, new_file)
     if new_file not in jobs_already_resumed:
         jobs_to_resume.append(new_file)
         jobs_already_resumed.append(new_file)
 
 with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/jobs_to_resume.txt', 'w') as f:
     f.write('\n'.join(jobs_to_resume))
-pickle.dump(jobs_already_resumed, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/jobs_resumed.pkl', 'wb'))
+pickle.dump(jobs_already_resumed, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/trained_models/jobs_resumed.pkl', 'wb'))

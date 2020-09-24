@@ -56,6 +56,7 @@ class Drug_sensitivity_single_cell:
     def __init__(self):
         #prism dataset
         self.type_data = None
+        self.prism_from = None
 
         #gene expression
         self.data_from = None
@@ -147,7 +148,9 @@ class Drug_sensitivity_single_cell:
             self.ccle2depmap_dict = pickle.load(open('{}/prism_pancancer/ccle2depmap_dict.pkl'.format(self.path_data), 'rb'))
             self.new_indexes2barcode_screen = pickle.load(open('{}/prism_pancancer/prism_pancancer_new_indexes_once_newIndex2barcodeScreen_dict.pkl'.format(self.path_data), 'rb'))
         elif self.type_data == 'secondary':
-            self.path_data = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary'
+            self.prism_from = self.data_from.split('_')[-1]
+            self.data_from = self.data_from.split('_')[0]
+            self.path_data = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/{}'.format(self.prism_from)
             self.new_indexes2barcode_screen = pickle.load(open('{}/prism_pancancer/prism_pancancer_new_indexes_newIndex2barcodeScreen_dict.pkl'.format(self.path_data), 'rb'))
 
 
@@ -157,7 +160,7 @@ class Drug_sensitivity_single_cell:
 
         #add information to report
         if self.run_type == 'resume':
-            lines = ['\n', '*** RESUME FOR MORE {} EPOCHS** \n'.format(list_parameters[17])]
+            lines = ['\n', '*** RESUME FOR MORE {} EPOCHS*** \n'.format(list_parameters[17])]
         else:
             lines = ['** REPORT - DRUG SENSITIVITY **\n',
                     '* Parameters',
@@ -205,53 +208,44 @@ class Drug_sensitivity_single_cell:
                 test_set = final_indexes[train_number+validation_number:]
 
             elif self.type_of_split == 'leave-one-cell-line-out':
-                with open('{}/prism_pancancer/prism_pancancer_cell_lines_pancancer.txt'.format(self.path_data), 'r') as f:
-                    list_cell_lines = f.readlines()
-
-                barcode2indexes = pickle.load(open('{}/prism_pancancer/prism_pancancer_new_indexes_once_dict.pkl'.format(self.path_data), 'rb'))
-
-                list_cell_lines = [x.strip('\n') for x in list_cell_lines]
-
+                pancancer_metadata = pickle.load(open('{}/pkl_files/pancancer_metadata.pkl'.format(self.path_data), 'rb'))
+                list_cell_lines = list(pancancer_metadata.Cell_line.unique())
                 list_cell_lines.remove(self.to_test)
-
-                barcodes_per_cell_line = pickle.load(open('{}/prism_pancancer/barcodes_per_cell_line_dict.pkl'.format(self.path_data), 'rb'))
 
                 train_cells = list_cell_lines[:-1]
                 validation_cell = list_cell_lines[-1]
+                
+                prism_pancancer_new_indexes_dict = pickle.load(open('{}/prism_pancancer/prism_pancancer_new_indexes_dict.pkl'.format(self.path_data), 'rb'))
+
+                train_set = []
+                for i in range(len(train_cells)):
+                    train_set.extend(prism_pancancer_new_indexes_dict[train_cells[i]])
+                
+                validation_set = prism_pancancer_new_indexes_dict[validation_cell]
+                
+                test_set = prism_pancancer_new_indexes_dict[self.to_test]
+
+            elif self.type_of_split == 'leave-one-tumour-out':
+                pancancer_metadata = pickle.load(open('{}/pkl_files/pancancer_metadata.pkl'.format(self.path_data), 'rb'))
+                list_tumours = list(pancancer_metadata.Cancer_type.unique())
+                list_tumours.remove(self.to_test)
+                
+                train_tumours = list_tumours[:-1]
+                validation_tumour = list_tumours[-1]
+                
+                train_cells = list(pancancer_metadata.Cell_line.loc[pancancer_metadata.Cancer_type.isin(train_tumours)].unique())
+                validation_cells = list(pancancer_metadata.Cell_line.loc[pancancer_metadata.Cancer_type == validation_tumour].unique())
+                test_cells = list(pancancer_metadata.Cell_line.loc[pancancer_metadata.Cancer_type == self.to_test].unique())
 
                 train_set = []
                 validation_set = []
                 test_set = []
                 for i in range(len(train_cells)):
-                    for bar in barcodes_per_cell_line[train_cells[i]]:
-                        train_set.extend(barcode2indexes[bar])
-                for bar in barcodes_per_cell_line[validation_cell]:
-                    validation_set.extend(barcode2indexes[bar])
-                for bar in barcodes_per_cell_line[self.to_test]:
-                    test_set.extend(barcode2indexes[bar])
-
-            elif self.type_of_split == 'leave-one-tumour-out':
-                with open('{}/prism_pancancer/prism_pancancer_tumours.txt'.format(self.path_data), 'r') as f:
-                    list_tumours = f.readlines()
-
-                barcode2indexes = pickle.load(open('{}/prism_pancancer/prism_pancancer_new_indexes_once_dict.pkl'.format(self.path_data), 'rb'))
-                list_tumours.remove(self.to_test)
-
-                barcodes_per_tumour = pickle.load(open('{}/prism_pancancer/barcodes_per_tumour_dict.pkl'.format(self.path_data), 'rb'))
-
-                train_tumours = list_tumours[:-1]
-                validation_tumour = list_tumours[-1]
-
-                train_set = []
-                validation_set = []
-                test_set = []
-                for i in range(len(train_tumours)):
-                    for bar in barcodes_per_tumour[train_tumours[i]]:
-                        train_set.extend(barcode2indexes[bar])
-                for bar in barcodes_per_tumour[validation_tumour]:
-                    validation_set.extend(barcode2indexes[bar])
-                for bar in barcodes_per_tumour[self.to_test]:
-                    test_set.extend(barcode2indexes[bar])
+                    train_set.extend(prism_pancancer_new_indexes_dict[train_cells[i]])
+                for i in range(len(validation_cells)):
+                    validation_set.extend(prism_pancancer_new_indexes_dict[validation_cells[i]])
+                for i in range(len(test_cells)):
+                    test_set.extend(prism_pancancer_new_indexes_dict[test_cells[i]])
 
         with open('pickle/Train_set_index.txt', 'w') as f:
             f.write('\n'.join(train_set))
@@ -381,6 +375,7 @@ class Drug_sensitivity_single_cell:
             for i in range(start_point):
                 if i == 0:
                     best_loss = (results['loss_values_training'][i], results['loss_values_validation'][i])
+                    n_epochs_not_getting_better = 0
                 else:
                     loss = results['loss_values_validation'][i]
                     if loss < best_loss[1]:
@@ -730,7 +725,6 @@ def run_drug_prediction(list_parameters, run_type):
     if run_type == 'resume':
         more_epoch = list_parameters[-2]
         list_parameters = pickle.load(open('pickle/list_initial_parameters_single_cell.pkl', 'rb'))
-        list_parameters.pop(-1)
         filename = drug_sens.create_filename(list_parameters)
         list_parameters.extend([run_type, more_epoch])
     else:
