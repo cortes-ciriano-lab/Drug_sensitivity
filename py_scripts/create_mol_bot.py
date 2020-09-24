@@ -32,9 +32,9 @@ def create_prism_bottleneck_run_once():
     mols = []
     mol_indexes = []
     fingerprints = []
-    for i in range(len(list(drug_sensitivity_metadata['smiles']))):
-        s = drug_sensitivity_metadata['smiles'].iloc[i]
-        if ',' in s: #means that exists more than one smile representation of the compound
+    for i in range(len(list(drug_sensitivity['smiles']))):
+        s = drug_sensitivity['smiles'].iloc[i]
+        if ',' in s:  # means that exists more than one smile representation of the compound
             if '\"' in s:
                 s = s.strip('\"')
             s = s.split(', ')
@@ -43,25 +43,27 @@ def create_prism_bottleneck_run_once():
         for j in range(len(s)):
             mols.append(s[j])
             m = Chem.MolFromSmiles(s[j])
-            fp = AllChem.GetMorganFingerprintAsBitVect(m, 2, nBits = 1024)
+            fp = AllChem.GetMorganFingerprintAsBitVect(m, 2, nBits=1024)
             fingerprints.append(np.array(fp))
             if len(s) > 1:
-                mol_indexes.append('{}:::{}'.format(drug_sensitivity_metadata.iloc[i].name, j))
+                mol_indexes.append('{}:::{}'.format(drug_sensitivity.iloc[i].name, j))
             else:
-                mol_indexes.append(drug_sensitivity_metadata.iloc[i].name)
+                mol_indexes.append(drug_sensitivity.iloc[i].name)
     
-    del drug_sensitivity_metadata
+    del drug_sensitivity
     gc.collect()
     
+    fingerprints_smiles_dicts = {}
     for i in range(len(mol_indexes)):
-        index = mol_indexes[i]
+        index = mol_indexes[i].split('::')
+        new_index = '::'.join(index[1:])
         smile = mols[i]
         fp = fingerprints[i]
-        with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/molecular/prism_indexes_smiles.txt', 'a') as f:
-            f.write('{}, {}\n'.format(index, smile))
-        with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/molecular/prism_indexes_morgan_fingerprints.txt', 'a') as f:
-            f.write('{}, {}\n'.format(index, fp))
-            
+        if new_index not in fingerprints_smiles_dicts.keys():
+            fingerprints_smiles_dicts[new_index] = {'Morgan_Fingerprint' : fp,
+                                                    'Smile' : smile}
+    fingerprints_smiles_dicts = pd.DataFrame.from_dict(fingerprints_smiles_dicts, orient = 'index')
+    fingerprints_smiles_dicts.reset_index().to_csv('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data/molecular/prism_indexes_morgan_fingerprints_smiles.csv', header=True, index=False)
     
     mols = ohf.featurize(mols, maximum_length_smiles)
     if True in np.isnan(np.array(mols)):
@@ -106,7 +108,7 @@ def create_prism_bottleneck_run_secondary(values_from):
     maximum_length_smiles = int(molecules.get_maximum_length())
 
     drug_sensitivity = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/{}/pkl_files/prism_dataset.pkl'.format(values_from), 'rb'))
-
+    
     mols = []
     mol_indexes = []
     fingerprints = []
@@ -127,18 +129,21 @@ def create_prism_bottleneck_run_secondary(values_from):
                 mol_indexes.append('{}:::{}'.format(drug_sensitivity.iloc[i].name, j))
             else:
                 mol_indexes.append(drug_sensitivity.iloc[i].name)
-
+    
     del drug_sensitivity
     gc.collect()
-
+    
+    fingerprints_smiles_dicts = {}
     for i in range(len(mol_indexes)):
-        index = mol_indexes[i]
+        index = mol_indexes[i].split('::')
+        new_index = '::'.join(index[1:])
         smile = mols[i]
         fp = fingerprints[i]
-        with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/{}/molecular/prism_indexes_smiles.txt'.format(values_from), 'a') as f:
-            f.write('{}, {}\n'.format(index, smile))
-        with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/{}/molecular/prism_indexes_morgan_fingerprints.txt'.format(values_from), 'a') as f:
-            f.write('{}, {}\n'.format(index, fp))
+        if new_index not in fingerprints_smiles_dicts.keys():
+            fingerprints_smiles_dicts[new_index] = {'Morgan_Fingerprint' : fp,
+                                                    'Smile' : smile}
+    fingerprints_smiles_dicts = pd.DataFrame.from_dict(fingerprints_smiles_dicts, orient = 'index')
+    fingerprints_smiles_dicts.reset_index().to_csv('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/{}/molecular/prism_indexes_morgan_fingerprints_smiles.csv'.format(values_from), header=True, index=False)
 
     mols = ohf.featurize(mols, maximum_length_smiles)
     if True in np.isnan(np.array(mols)):
