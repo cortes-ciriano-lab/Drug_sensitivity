@@ -26,3 +26,6 @@ loss_results_single_cell_pancancer.txt
 summary_results.csv
 test.txt
 *.log
+check_cases_secondary_pancancer_ic50.txt
+loss_results_secondary_pancancer_ic50.txt
+summary_results_secondary_pancancer_ic50.csv

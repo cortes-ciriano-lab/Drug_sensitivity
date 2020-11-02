@@ -74,13 +74,10 @@ class VAE_gene_expression_single_cell(nn.Module):
         return z_mu, z_var
     
     def reparametrize(self, z_mu, z_var):
-        if self.training:
-            std = torch.exp(z_var/2)
-            eps = torch.randn_like(std) * 1e-2
-            x_sample = eps.mul(std).add_(z_mu)
-            return x_sample
-        else:
-            return z_mu
+        std = torch.exp(z_var/2)
+        eps = torch.randn_like(std) * 1e-2
+        x_sample = eps.mul(std).add_(z_mu)
+        return x_sample
     
     def decoder(self, z):
         z = F.relu(self.fc4(z))
@@ -142,13 +139,10 @@ class VAE_molecular(nn.Module):
         return z_mu, z_var
     
     def reparametrize(self, z_mu, z_var):
-        if self.training:
-            std = torch.exp(z_var/2)
-            eps = torch.randn_like(std) * 1e-2
-            x_sample = eps.mul(std).add_(z_mu)
-            return x_sample
-        else:
-            return z_mu
+        std = torch.exp(z_var/2)
+        eps = torch.randn_like(std) * 1e-2
+        x_sample = eps.mul(std).add_(z_mu)
+        return x_sample
     
     def decoder(self, z):
         z = F.selu(self.fc3(z))
@@ -165,40 +159,3 @@ class VAE_molecular(nn.Module):
         x_sample = self.reparametrize(z_mu, z_var)
         output = self.decoder(x_sample)
         return output, x_sample, z_mu, z_var
-    
-# -------------------------------------------------- AE - GENE EXPRESSION - BULK --------------------------------------------------
-
-class AE_gene_expression_bulk(nn.Module):
-    def __init__(self, **kwargs):
-        super().__init__()
-
-        '''Defining the sizes of the different outputs'''
-        layer1_input = int(kwargs['input_size'])  # size of the input and output
-        layer2_hidden = int(kwargs['first_hidden'])  # output of the input and third layer
-        layer3_hidden = int(kwargs['second_hidden'])  # output of the second layer
-        layer4_bottleneck = int(kwargs['bottleneck'])
-        self.dropout_prob = float(kwargs['dropout_prob'])
-
-        '''Definition of the different layers'''
-        self.fc1 = nn.Linear(layer1_input, layer2_hidden)
-        self.fc2 = nn.Linear(layer2_hidden, layer3_hidden)
-        self.fc3 = nn.Linear(layer3_hidden, layer4_bottleneck)
-        self.fc4 = nn.Linear(layer4_bottleneck, layer3_hidden)
-        self.fc5 = nn.Linear(layer3_hidden, layer2_hidden)
-        self.fc6 = nn.Linear(layer2_hidden, layer1_input)
-
-    def forward(self, x):
-        # encode
-        x = F.relu(self.fc1(x))
-        x = F.dropout(x, self.dropout_prob, inplace=True)
-        x = F.relu(self.fc2(x))
-        x = F.dropout(x, self.dropout_prob, inplace=True)
-        x_bottleneck = F.relu(self.fc3(x))
-
-        # decode
-        x = F.relu(self.fc4(x_bottleneck))
-        x = F.dropout(x, self.dropout_prob, inplace=True)
-        x = F.relu(self.fc5(x))
-        x = F.dropout(x, self.dropout_prob, inplace=True)
-        output = self.fc6(x)
-        return output, x_bottleneck

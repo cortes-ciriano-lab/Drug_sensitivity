@@ -55,12 +55,12 @@ class Process_dataset_pancancer():
     
     def load_pancancer(self):
         #gene_expresion :: rows: AAACCTGAGACATAAC-1-18 ; columns: RP11-34P13.7
-        pancancer_data = pickle.load(open('{}/PANCANCER/pancancer_data.pkl'.format(path_data), 'rb'))
+        pancancer_data = pickle.load(open('{}/PANCANCER/pancancer_data_7000.pkl'.format(path_data), 'rb'))
         print('\n Pancancer dataset (after loading)')
         print(pancancer_data.shape)
         
         #metadata :: rows: AAACCTGAGACATAAC-1-18 ; Cell_line: NCIH2126_LUNG (CCLE_name)
-        pancancer_metadata= pickle.load(open('{}/PANCANCER/pancancer_metadata.pkl'.format(path_data), 'rb'))
+        pancancer_metadata= pickle.load(open('{}/PANCANCER/pancancer_metadata_7000.pkl'.format(path_data), 'rb'))
         print('\n Pancancer metadata (after loading)')
         print(pancancer_metadata.shape)
         

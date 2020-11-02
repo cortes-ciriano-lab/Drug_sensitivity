@@ -17,6 +17,7 @@ loss_params = []
 check = []
 type_data = sys.argv[1]
 data_from = sys.argv[2]
+type_network = sys.argv[3]
 files = open('loss_results_{}_{}.txt'.format(type_data, data_from),'r')
 files = files.readlines()
 for file in files:
@@ -47,15 +48,16 @@ for file in files:
         i+=1
     
     try:
+        if type_network == 'Neural Network':
             validation_loss_total.append(validation_loss)
-            train_loss_total.append(training_loss)
-            test_loss_total.append(test_loss)
-            
             validation_corr_total.append(validation_corr)
-            train_corr_total.append(train_corr)
-            test_corr_total.append(test_corr)
-            
-            loss_params.append(file.split('/')[-1])
+            train_loss_total.append(training_loss)
+        test_loss_total.append(test_loss)
+        
+        train_corr_total.append(train_corr)
+        test_corr_total.append(test_corr)
+        
+        loss_params.append(file.split('/')[-1])
         
     except:
         check.append(file)
@@ -63,18 +65,28 @@ for file in files:
 with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/check_cases_{}_{}.txt'.format(type_data, data_from), 'w') as f:
     f.write('\n'.join(check))
 
-d = pd.DataFrame(validation_loss_total, columns = ['Val_loss_total'])
-d['Train_loss_total'] = train_loss_total
-d['Test_loss_total'] = test_loss_total
-d['Train_corr_total'] = train_corr_total
-d['Val_corr_total'] = validation_corr_total
-d['Test_corr_total'] = test_corr_total
-d['Difference'] = np.abs(d['Train_loss_total'] - d['Val_loss_total'])
-d['Parameters'] = loss_params
-d.dropna(inplace=True)
-d = d.sort_values(['Val_loss_total'])
-d.to_csv('summary_results_{}_{}.csv'.format(type_data, data_from), header=True, index=False)
+if type_network == 'Neural Network':
+    d = pd.DataFrame(validation_loss_total, columns = ['Val_loss_total'])
+    d['Train_loss_total'] = train_loss_total
+    d['Test_loss_total'] = test_loss_total
+    d['Train_corr_total'] = train_corr_total
+    d['Val_corr_total'] = validation_corr_total
+    d['Test_corr_total'] = test_corr_total
+    d['Difference'] = np.abs(d['Train_loss_total'] - d['Val_loss_total'])
+    d['Parameters'] = loss_params
+    d.dropna(inplace=True)
+    d = d.sort_values(['Val_loss_total'])
+    d.to_csv('summary_results_{}_{}.csv'.format(type_data, data_from), header=True, index=False)
+else:
+    d = pd.DataFrame(test_loss_total, columns = ['Test_loss_total'])
+    d['Train_corr_total'] = train_corr_total
+    d['Test_corr_total'] = test_corr_total
+    d['Parameters'] = loss_params
+    d.dropna(inplace=True)
+    d = d.sort_values(['Test_loss_total'])
+    d.to_csv('summary_results_{}_{}.csv'.format(type_data, data_from), header=True, index=False)
 
+'''
 indexes_to_keep = []
 for i in list(d.index):
     # if d['Val_loss_total'].loc[i] < 0.58 or '0.00001' in d['Parameters'].loc[i]:
@@ -97,3 +109,4 @@ for file in list(best_parameters['Parameters']):
 with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/jobs_to_resume.txt', 'w') as f:
     f.write('\n'.join(jobs_to_resume))
 pickle.dump(jobs_already_resumed, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/trained_models/jobs_resumed.pkl', 'wb'))
+'''
