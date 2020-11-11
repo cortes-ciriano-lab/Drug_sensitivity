@@ -47,31 +47,52 @@ class VAE_gene_expression_single_cell(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
 
-        layer1_input = int(kwargs['n_genes'])
-        layers = kwargs['layers']
-        layers = layers.split("_")
-        layer2_hidden = int(layers[0]) 
-        layer3_hidden = int(layers[1])
-        layer4_bottleneck = int(layers[2])
+        number_genes = int(kwargs['n_genes'])
+        self.number_pathways = int(kwargs['n_pathways'])
+        path_matrix_file = kwargs['path_matrix']
+        hidden_layers = kwargs['layers']
         self.dropout_prob = float(kwargs['dropout_prob'])
 
             
-        '''Definition of the different layers'''
-        self.fc1 = nn.Linear(layer1_input, layer2_hidden) 
-        self.fc2 = nn.Linear(layer2_hidden, layer3_hidden)
-        self.fc3_mu = nn.Linear(layer3_hidden, layer4_bottleneck)
-        self.fc3_var = nn.Linear(layer3_hidden, layer4_bottleneck) 
-        self.fc4 = nn.Linear(layer4_bottleneck, layer3_hidden) 
-        self.fc5 = nn.Linear(layer3_hidden, layer2_hidden) 
-        self.fc6 = nn.Linear(layer2_hidden, layer1_input) 
+        if self.number_pathways != 0:
+            layers = [number_genes, self.number_pathways]
+        else:
+            layers = [number_genes]
+        layers.extend(hidden_layers)
+
+        # Definition of the different layers
+        self.layers_encoder = nn.ModuleList()
+        i = 0
+        while (i+1) < len(layers):
+            if i == 0 and self.number_pathways != 0:
+                self.layers_encoder.append(MaskedLinear(int(layers[i]), int(layers[i+1]), path_matrix_file))
+            else:
+                self.layers_encoder.append(nn.Linear(int(layers[i]), int(layers[i + 1])))
+            i += 1
+
+        self.layers_decoder = nn.ModuleList()
+        while (i-1) >= 0:
+            self.layers_decoder.append(nn.Linear(int(layers[i]), int(layers[i-1])))
+            i -= 1
+        
+        print(self.number_pathways)
     
     def encoder(self, x):
-        x = F.relu(self.fc1(x))
-        x = F.dropout(x, self.dropout_prob)
-        x = F.relu(self.fc2(x))
-        z_mu = self.fc3_mu(x)
-        z_var = self.fc3_var(x)
-        return z_mu, z_var
+        for i, l in enumerate(self.layers_encoder):
+            if i == 0:
+                pathway_layer = l(x)
+                x = F.relu(pathway_layer)
+                if self.number_pathways == 0:
+                    x = F.dropout(x, self.dropout_prob, inplace=True)
+            elif i != len(self.layers_encoder)-1:
+                x = l(x)
+                x = F.relu(x)
+                x = F.dropout(x, self.dropout_prob, inplace = True)
+            else:
+                z_mu = l(x)
+                z_var = l(x)
+                
+        return z_mu, z_var, pathway_layer
     
     def reparametrize(self, z_mu, z_var):
         std = torch.exp(z_var/2)
@@ -80,18 +101,18 @@ class VAE_gene_expression_single_cell(nn.Module):
         return x_sample
     
     def decoder(self, z):
-        z = F.relu(self.fc4(z))
-        z = F.dropout(z, self.dropout_prob)
-        z = F.relu(self.fc5(z))
-        z = F.dropout(z, self.dropout_prob)
-        z = self.fc6(z)
+        for i, l in enumerate(self.layers_decoder):
+            z = l(z)
+            if i != len(self.layers_decoder) - 1:
+                z = F.relu(z)
+                z = F.dropout(z, self.dropout_prob, inplace=True)
         return z
     
     def forward(self, x):
-        z_mu, z_var = self.encoder(x)
+        z_mu, z_var, pathway_layer = self.encoder(x)
         x_sample = self.reparametrize(z_mu, z_var)
         output = self.decoder(x_sample)
-        return output, x_sample, z_mu, z_var
+        return output, x_sample, z_mu, z_var, pathway_layer
 
 # -------------------------------------------------- VAE - DRUGS --------------------------------------------------
 

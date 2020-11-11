@@ -124,9 +124,9 @@ class Process_dataset_pancancer():
                 batch = mols[i:i + self.batch_m]
                 inputs = torch.tensor(batch).type('torch.FloatTensor').to(self.device)
                 predictions = self.molecular_model(inputs)
-                predictions_complete.extend(predictions[0].cpu().numpy().tolist())
                 bottleneck_complete.extend(predictions[1].cpu().numpy().tolist())
                 output = self.ohf.back_to_smile(predictions[0].cpu().numpy().tolist())
+                predictions_complete.extend(output)
                 for i in range(len(output)):
                     m = Chem.MolFromSmiles(output[i])
                     if m is not None:
@@ -139,10 +139,10 @@ class Process_dataset_pancancer():
                         f.write('\n'.join(['Input: {}'.format(smiles[i]), 'Output: {}'.format(output[i]), '\n']))
                         f.write('\n')
                     
-        mol_outputs = {}
-        for i in range(len(predictions_complete)):
-            mol_outputs[indexes[i]] = predictions_complete[i]
-        pickle.dump(mol_outputs, open('{}/molecular/run_once/prism_outputs.pkl'.format(self.path_results), 'wb'), protocol=4)
+        
+        mol_outputs = pd.DataFrame(predictions_complete)
+        mol_outputs.index = indexes
+        mol_outputs.to_csv('{}/molecular/run_once/prism_outputs.csv'.format(self.path_results), header=True, index=True)
         
         del predictions_complete
         del mol_outputs
@@ -150,20 +150,19 @@ class Process_dataset_pancancer():
         
         mol_bottlenecks = pd.DataFrame(bottleneck_complete)
         mol_bottlenecks.index = indexes
-        pickle.dump(mol_bottlenecks, open('{}/molecular/run_once/prism_bottlenecks.pkl'.format(self.path_results), 'wb'), protocol=4)
-        mol_bottlenecks.to_csv('{}/molecular/run_once/prism_bottlenecks.csv'.format(self.path_results), header=True, index=False)
+        pickle.dump(mol_bottlenecks, open('{}/molecular/run_once/prism_bottlenecks.pkl'.format(self.path_results), 'wb'))
+        mol_bottlenecks.to_csv('{}/molecular/run_once/prism_bottlenecks.csv'.format(self.path_results), header=True, index=True)
   
         del bottleneck_complete
+        del mol_bottlenecks
         gc.collect()
         
-        return mol_bottlenecks, indexes
+        return indexes
     
     # --------------------------------------------------
     
-    def load_scVAE(self):
-        path = '/hps/research1/icortes/acunha/python_scripts/single_cell/best_model/pancancer_with_alpha/pancancer_{}/'.format(self.run_type)
-        
-        combinations = [['all_genes'], ['no_pathway']] #, 'best_7000'], ['no_pathway', 'kegg_pathways', 'canonical_pathways', 'chemical_genetic_perturbations']]
+    def load_scVAE(self, num_genes):
+        path = '/hps/research1/icortes/acunha/python_scripts/single_cell/best_model/pancancer_{}'.format(self.run_type)
         
         if self.run_type == 'all_genes_no_pathway' or self.run_type == 'all_genes_canonical_pathways':
             _, self.batch_sc, _, _, _, self.dropout_sc, _, _, _, _, _, _, _, self.layers_sc, self.alpha_sc, _, self.pathway_sc, self.num_genes_sc = pickle.load(open('{}/list_initial_parameters_single_cell.pkl'.format(path), 'rb'))
@@ -174,7 +173,7 @@ class Process_dataset_pancancer():
         self.layers_sc = self.layers_sc.split('_')
         self.alpha_sc = float(self.alpha_sc)
         
-        if self.pathway != 'no_pathway':
+        if self.pathway_sc != 'no_pathway':
             pathways = {'canonical_pathways' : '/hps/research1/icortes/acunha/data/pathways/canonical_pathways/',
                         'chemical_genetic_perturbations' : '/hps/research1/icortes/acunha/data/pathways/chemical_genetic_perturbations/',
                         'kegg_pathways' : '/hps/research1/icortes/acunha/data/pathways/kegg_pathways'}
@@ -185,7 +184,7 @@ class Process_dataset_pancancer():
             number_pathways = 0
             path_matrix_file = ''
         
-        self.sc_model = VAE_gene_expression_single_cell(dropout_prob=self.dropout_sc, n_genes=self.num_genes_sc, layers=self.layers_sc)
+        self.sc_model = VAE_gene_expression_single_cell(dropout_prob=self.dropout_sc, n_genes=num_genes, layers=self.layers_sc, n_pathways = number_pathways, path_matrix = path_matrix_file)
         self.sc_model.to(self.device)
         
         model_parameters = pickle.load(open('{}/single_cell_model.pkl'.format(path), 'rb'))
@@ -193,10 +192,7 @@ class Process_dataset_pancancer():
     
     # --------------------------------------------------
     
-    def get_sc_bottlenecks(self, metadata, indexes, genes, pathways):
-        dataset = pd.read_csv('/hps/research1/icortes/acunha/python_scripts/single_cell/data/pancancer/pancancer_data_{}_{}.csv'.format(genes, pathways), header = 0, index_col = 0)
-        dataset = dataset.loc[dataset.index.isin(indexes)]
-        
+    def get_sc_bottlenecks(self, dataset, metadata, indexes):
         self.sc_model.eval()
         bottleneck_complete = []
         with torch.no_grad():
@@ -207,42 +203,39 @@ class Process_dataset_pancancer():
                 predictions = self.sc_model(inputs)
                 output = predictions[0].cpu().numpy().tolist()
                 bottleneck_complete.extend(predictions[1].cpu().numpy().tolist())
+                pathway = predictions[-1].cpu().numpy().tolist()
                 for j in range(len(output)):
-                    output[j] = '{},{}\n'.fomat(list_indexes[j], ','.join([str(x) for x in output[j]]))
+                    output[j] = '{},{}\n'.format(list_indexes[j], ','.join([str(x) for x in output[j]]))
                 with open('{}/single_cell/pancancer_{}_outputs.csv'.format(self.path_results, self.run_type), 'a') as f:
                     f.write('\n'.join(output))
+                for j in range(len(pathway)):
+                    pathway[j] = '{},{}\n'.format(list_indexes[j], ','.join([str(x) for x in pathway[j]]))
+                with open('{}/single_cell/pancancer_{}_pathways.csv'.format(self.path_results, self.run_type), 'a') as f:
+                    f.write('\n'.join(pathway))
                     
         bottleneck_complete = pd.DataFrame(bottleneck_complete)
         bottleneck_complete.index = indexes
         cell_lines = []
         for barcode in indexes:
-            cell_lines.append(sc_metadata.loc[barcode, 'Cell_line'])
+            cell_lines.append(metadata.loc[barcode, 'Cell_line'])
         bottleneck_complete['Cell_line'] = cell_lines
         bottleneck_complete.to_csv('{}/single_cell/pancancer_{}_bottlenecks.csv'.format(self.path_results, self.run_type), header=True, index=True)
         pickle.dump(bottleneck_complete, open('{}/single_cell/pancancer_{}_bottlenecks.pkl'.format(self.path_results, self.run_type), 'wb'))
-
-        return bottleneck_complete
+        
+        del bottleneck_complete
+        del output
+        del pathway
+        gc.collect
     
     # --------------------------------------------------
     
     def load_pancancer(self):
-        #gene_expresion :: rows: AAACCTGAGACATAAC-1-18 ; columns: RP11-34P13.7
-        pancancer_data = pd.read_csv('/hps/research1/icortes/acunha/python_scripts/single_cell/data/pancancer/pancancer_data_all_genes_kegg_pathways.csv', header = 0, index_col = 0)
-        print('\n Pancancer: number of barcodes (after loading)')
-        print(pancancer_data.shape[0])
-        
-        list_single_cells = list(pancancer_data.index)
-        
-        del pancancer_data
-        gc.collect()
-        
         #metadata :: rows: AAACCTGAGACATAAC-1-18 ; Cell_line: NCIH2126_LUNG (CCLE_name)
         pancancer_metadata = pd.read_csv('/hps/research1/icortes/acunha/python_scripts/single_cell/data/pancancer/pancancer_metadata.csv', header = 0, index_col = 0)
         print('\n Pancancer metadata (after loading)')
         print(pancancer_metadata.shape)
-        
-        pancancer_metadata = pancancer_metadata.loc[pancancer_metadata.index.isin(list_single_cells)]
-        return list_single_cells, pancancer_metadata
+
+        return pancancer_metadata
     
     # --------------------------------------------------
         
@@ -299,9 +292,7 @@ class Process_dataset_pancancer():
     
     # --------------------------------------------------
     
-    def filter_cell_lines(self, list_barcodes, metadata_sc, drug_data):
-        metadata_sc = metadata_sc.loc[metadata_sc.index.isin(list_barcodes)] #filter the metadata
-        
+    def filter_cell_lines(self, metadata_sc, drug_data):
         #extract the different cell lines from the single cell dataset
         list_cell_lines_sc_ccle = list(metadata_sc['Cell_line'].unique()) #list of the different cell lines - ccle id
         
@@ -311,12 +302,12 @@ class Process_dataset_pancancer():
         #find the common cell lines from both datasets (prism and single cell)
         list_commun_cell_lines = list(set(list_cell_lines_drug_ccle).intersection(list_cell_lines_sc_ccle))
         
-        return list_commun_cell_lines[:1]
+        return list_commun_cell_lines
 
     # --------------------------------------------------
     
-    def create_integrated_datasets(self, screens_list, prism_dataset, prism_bottlenecks, pancancer_bottlenecks, pancancer_metadata):
-        barcode2indexes = {}
+    def create_integrated_datasets(self, screens_list, prism_dataset, list_pancancer_bottlenecks, pancancer_metadata):
+        celllines2indexes = {}
         new_indexes_dict = {}
         total = 0
         screens_prism2bottlenecks = {}
@@ -328,7 +319,7 @@ class Process_dataset_pancancer():
 
         for ccle in pancancer_metadata['Cell_line'].unique():
             barcodes = list(pancancer_metadata.loc[pancancer_metadata['Cell_line'] == ccle].index)
-            barcodes = {x : pancancer_bottlenecks.index.get_loc(x) for x in barcodes} #for each barcode returns its index
+            barcodes = {x : list_pancancer_bottlenecks.index(x) for x in barcodes} #for each barcode returns its index
             indexes = []
             prism_subset = prism_dataset.loc[prism_dataset['ccle_name'] == ccle]
             prism_subset = prism_subset.loc[prism_subset['broad_id'].isin(list(screens_prism2bottlenecks.keys()))]
@@ -336,7 +327,7 @@ class Process_dataset_pancancer():
                 screen = prism_subset.iloc[j].name
                 compound_id = prism_subset['broad_id'].iloc[j]
                 for full_index in screens_prism2bottlenecks[compound_id]:
-                    screen_i = prism_bottlenecks.index.get_loc(full_index)
+                    screen_i = screens_list.index(full_index)
                     sens_value = prism_subset[self.values_from].iloc[j]
                     new_index = screen.split('::')
                     new_index[1] = full_index
@@ -351,17 +342,17 @@ class Process_dataset_pancancer():
                         new_indexes_dict[new_index] = ((ccle, barcodes), (compound_id, screen_i), sens_value)
                         indexes.append(new_index)
                         total += 1
-            barcode2indexes[ccle] = indexes
+            celllines2indexes[ccle] = indexes
         print('Total indexes: {}'.format(total))
  
-        pickle.dump(barcode2indexes, open('{}/prism_pancancer/prism_pancancer_new_indexes_dict.pkl'.format(self.path_results), 'wb'))
+        pickle.dump(celllines2indexes, open('{}/prism_pancancer/prism_pancancer_new_indexes_dict.pkl'.format(self.path_results), 'wb'))
         pickle.dump(new_indexes_dict, open('{}/prism_pancancer/prism_pancancer_new_indexes_newIndex2barcodeScreen_dict.pkl'.format(self.path_results), 'wb'))
 
     # --------------------------------------------------
     
     def define_path_results(self, values_from):
         self.values_from = values_from
-        self.path_results = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary2/{}'.format(values_from) #cluster
+        self.path_results = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/{}'.format(values_from) #cluster
         # self.path_results = 'C:/Users/abeat/Documents/GitHub/Drug_sensitivity/data_secondary/{}'.format(values_from)
     
     # --------------------------------------------------
@@ -381,14 +372,14 @@ class Process_dataset_pancancer():
         prism_matrix, only_compounds = self.load_prism()
         
         #load pancancer dataset
-        list_single_cells, pancancer_metadata = self.load_pancancer()
+        pancancer_metadata = self.load_pancancer()
         
         #get commun cell lines in both datasets
-        list_commun_cell_lines_ccle = self.filter_cell_lines(list_single_cells, pancancer_metadata, prism_matrix)
+        list_commun_cell_lines_ccle = self.filter_cell_lines(pancancer_metadata, prism_matrix)
         
         #filter datasets
-        prism_matrix = prism_matrix.loc[prism_matrix['ccle_name'].isin(list_commun_cell_lines_ccle)].iloc[:10]
-        pancancer_metadata = pancancer_metadata.loc[pancancer_metadata['Cell_line'].isin(list_commun_cell_lines_ccle)].iloc[:10]
+        prism_matrix = prism_matrix.loc[prism_matrix['ccle_name'].isin(list_commun_cell_lines_ccle)]
+        pancancer_metadata = pancancer_metadata.loc[pancancer_metadata['Cell_line'].isin(list_commun_cell_lines_ccle)]
         list_single_cells = list(pancancer_metadata.index)
         
         for cell in list_commun_cell_lines_ccle:
@@ -443,11 +434,14 @@ class Process_dataset_pancancer():
         
         #create the bottlenecks - prism
         list_valid_compounds = list(prism_matrix['broad_id'].unique())
-        prism_bottlenecks, list_indexes_prism = self.get_smiles_bottlenecks(only_compounds, list_valid_compounds)
+        list_indexes_prism = self.get_smiles_bottlenecks(only_compounds, list_valid_compounds)
         with open('{}/prism_pancancer/prism_pancancer_screens.txt'.format(self.path_results), 'w') as f:
             f.write('\n'.join(list(list_indexes_prism)))
+        
+        print('PRISM bottlenecks created')
             
         del only_compounds
+        del self.molecular_model
         gc.collect()
         
         combinations = [['all_genes'], ['no_pathway']] #, 'best_7000'], ['no_pathway', 'kegg_pathways', 'canonical_pathways', 'chemical_genetic_perturbations']]
@@ -456,14 +450,25 @@ class Process_dataset_pancancer():
                 combination = '{}_{}'.format(combinations[0][i], combinations[1][j])
                 self.define_sc_path(combination)
                 
+                pancancer_dataset = pd.read_csv('/hps/research1/icortes/acunha/python_scripts/single_cell/data/pancancer/pancancer_data_{}_{}.csv'.format(combinations[0][i], combinations[1][j]), header = 0, index_col = 0)
+                pancancer_dataset = pancancer_dataset.loc[pancancer_dataset.index.isin(list_single_cells)]
+                
                 #initialize the molecular model
-                self.load_scVAE()
+                self.load_scVAE(pancancer_dataset.shape[1])
                 
                 #create the bottlenecks - pancancer
-                pancancer_bottlenecks = self.get_sc_bottlenecks(pancancer_metadata, list_single_cells, combinations[0][i], combinations[1][j])
-
+                self.get_sc_bottlenecks(pancancer_dataset, pancancer_metadata, list_single_cells)
+                
+                del pancancer_dataset
+                gc.collect()
+                
+                print('pancancer bottlenecks created - {} :: {}'.format(combinations[0][i], combinations[1][j]))
+        
+        del self.sc_model
+        gc.collect()
+        
         #create the integrate files
-        self.create_integrated_datasets(list_indexes_prism, prism_matrix, prism_bottlenecks, pancancer_bottlenecks, pancancer_metadata)
+        self.create_integrated_datasets(list_indexes_prism, prism_matrix, list_single_cells, pancancer_metadata)
         
         print('DONE!')
 

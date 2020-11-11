@@ -20,7 +20,7 @@ import datetime
 import random
 from lightgbm import LGBMRegressor
 
-from full_network import NN_drug_sensitivity, VAE_molecular, VAE_gene_expression_single_cell, AE_gene_expression_bulk
+from full_network import NN_drug_sensitivity, VAE_molecular, VAE_gene_expression_single_cell
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import RandomizedSearchCV
 
@@ -87,6 +87,7 @@ class Drug_sensitivity_single_cell:
         self.type_of_split = None
         self.to_test = None
         self.early_stop = None
+        self.combination = None
         
         self.type_lr = None
 
@@ -126,10 +127,12 @@ class Drug_sensitivity_single_cell:
         self.model_architecture = list_parameters[16]
         if 'yes' in list_parameters[17]: #tem de ser antes do runtype
             self.early_stop = int(list_parameters[17].split('-')[1])
-        self.run_type = list_parameters[18]
+        self.combination = list_parameters[18]
+        self.run_type = list_parameters[19]
 
         if self.model_architecture == 'NNet':
             self.layers_info = list_parameters[1].split('_')
+            self.layers_info = [int(x) for x in self.layers_info]
             self.layers_info.append('1')
             self.perc_val = float(list_parameters[6])
 
@@ -138,14 +141,14 @@ class Drug_sensitivity_single_cell:
             self.perc_val = 0.0
 
         if self.run_type == 'resume':
-            self.n_epochs += int(list_parameters[19])
+            self.n_epochs += int(list_parameters[20])
         
-        if self.type_lr == 'non_cyclical':
-            self.epoch_reset = self.n_epochs
-            self.step_size = self.n_epochs
+        # if self.type_lr == 'non_cyclical':
+        #     self.epoch_reset = self.n_epochs
+        #     self.step_size = self.n_epochs
 
-        if self.type_data == 'primary' or self.type_data == 'single_cell':
-            self.path_data = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data'
+        if self.type_data == 'primary':
+            self.path_data = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_primary'
             self.ccle2depmap_dict = pickle.load(open('{}/prism_pancancer/ccle2depmap_dict.pkl'.format(self.path_data), 'rb'))
             self.new_indexes2barcode_screen = pickle.load(open('{}/prism_pancancer/prism_pancancer_new_indexes_once_newIndex2barcodeScreen_dict.pkl'.format(self.path_data), 'rb'))
         elif self.type_data == 'secondary':
@@ -154,14 +157,13 @@ class Drug_sensitivity_single_cell:
             self.path_data = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/{}'.format(self.prism_from)
             self.new_indexes2barcode_screen = pickle.load(open('{}/prism_pancancer/prism_pancancer_new_indexes_newIndex2barcodeScreen_dict.pkl'.format(self.path_data), 'rb'))
 
-
         global seed
         if seed != self.seed:
             self.set_seed(self.seed)
 
         #add information to report
         if self.run_type == 'resume':
-            lines = ['\n', '*** RESUME FOR MORE {} EPOCHS*** \n'.format(list_parameters[19])]
+            lines = ['\n', '*** RESUME FOR MORE {} EPOCHS*** \n'.format(list_parameters[20])]
         else:
             lines = ['** REPORT - DRUG SENSITIVITY **\n',
                     '* Parameters',
@@ -197,7 +199,6 @@ class Drug_sensitivity_single_cell:
 
     def get_indexes(self):
         if self.data_from == 'pancancer':
-
             if self.type_of_split == 'random':
                 final_indexes = list(self.new_indexes2barcode_screen.keys())
                 final_indexes = shuffle(final_indexes)
@@ -209,45 +210,69 @@ class Drug_sensitivity_single_cell:
                 validation_set = final_indexes[train_number:train_number+validation_number]
                 test_set = final_indexes[train_number+validation_number:]
 
-            elif self.type_of_split == 'leave-one-cell-line-out':
-                pancancer_metadata = pickle.load(open('{}/pkl_files/pancancer_metadata.pkl'.format(self.path_data), 'rb'))
-                list_cell_lines = list(pancancer_metadata.Cell_line.unique())
-                list_cell_lines.remove(self.to_test)
-
-                train_cells = list_cell_lines[:-1]
-                validation_cell = list_cell_lines[-1]
+            else:
+                #common cell lines between the prism dataset and pancancer
+                with open('{}/prism_pancancer/prism_pancancer_cell_lines_pancancer.txt'.format(self.path_data), 'r') as f:
+                    list_cell_lines = f.readlines()
+                    list_cell_lines = [x.strip('\n') for x in list_cell_lines]
                 
+                #celllines2indexes dict
                 prism_pancancer_new_indexes_dict = pickle.load(open('{}/prism_pancancer/prism_pancancer_new_indexes_dict.pkl'.format(self.path_data), 'rb'))
+                
+                if self.type_of_split == 'leave-one-cell-line-out':
+                    list_cell_lines.remove(self.to_test)
+                    
+                    train_set = []
+                    if self.model_architecture == 'NNet':
+                        train_cells = list_cell_lines[:-1]
+                        validation_cell = list_cell_lines[-1]
+                        
+                        for i in range(len(train_cells)):
+                            train_set.extend(prism_pancancer_new_indexes_dict[train_cells[i]])
+                        
+                        validation_set = prism_pancancer_new_indexes_dict[validation_cell]
+                        
+                    else:
+                        validation_set = []
+                        for i in range(len(list_cell_lines)):
+                            train_set.extend(prism_pancancer_new_indexes_dict[list_cell_lines[i]])
 
-                train_set = []
-                for i in range(len(train_cells)):
-                    train_set.extend(prism_pancancer_new_indexes_dict[train_cells[i]])
-                
-                validation_set = prism_pancancer_new_indexes_dict[validation_cell]
-                
-                test_set = prism_pancancer_new_indexes_dict[self.to_test]
+                    test_set = prism_pancancer_new_indexes_dict[self.to_test]
 
-            elif self.type_of_split == 'leave-one-tumour-out':
-                pancancer_metadata = pickle.load(open('{}/pkl_files/pancancer_metadata.pkl'.format(self.path_data), 'rb'))
-                list_tumours = list(pancancer_metadata.Cancer_type.unique())
-                list_tumours.remove(self.to_test)
-                
-                train_tumours = list_tumours[:-1]
-                validation_tumour = list_tumours[-1]
-                
-                train_cells = list(pancancer_metadata.Cell_line.loc[pancancer_metadata.Cancer_type.isin(train_tumours)].unique())
-                validation_cells = list(pancancer_metadata.Cell_line.loc[pancancer_metadata.Cancer_type == validation_tumour].unique())
-                test_cells = list(pancancer_metadata.Cell_line.loc[pancancer_metadata.Cancer_type == self.to_test].unique())
+                elif self.type_of_split == 'leave-one-tumour-out':
+                    with open('{}/prism_pancancer/prism_pancancer_tumours.txt'.format(self.path_data), 'r') as f:
+                        list_tumours = f.readlines()
+                        list_tumours = [x.strip('\n') for x in list_tumours]
+                        list_tumours.remove(self.to_test)
+                    
+                    pancancer_metadata = pd.read_csv('/hps/research1/icortes/acunha/python_scripts/single_cell/data/pancancer/pancancer_metadata.csv', header = 0, index_col = 0)
+                    pancancer_metadata = pancancer_metadata.loc[pancancer_metadata['Cell_line'].isin(list_cell_lines)]
+                    train_set = []
+                    validation_set = []
+                    if self.model_architecture == 'NNet':
+                        train_tumours = list_tumours[:-1]
+                        validation_tumour = list_tumours[-1]
+                        
+                        train_cells = list(pancancer_metadata.Cell_line.loc[pancancer_metadata.Cancer_type.isin(train_tumours)].unique())
+                        validation_cells = list(pancancer_metadata.Cell_line.loc[pancancer_metadata.Cancer_type == validation_tumour].unique())
 
-                train_set = []
-                validation_set = []
-                test_set = []
-                for i in range(len(train_cells)):
-                    train_set.extend(prism_pancancer_new_indexes_dict[train_cells[i]])
-                for i in range(len(validation_cells)):
-                    validation_set.extend(prism_pancancer_new_indexes_dict[validation_cells[i]])
-                for i in range(len(test_cells)):
-                    test_set.extend(prism_pancancer_new_indexes_dict[test_cells[i]])
+                        for i in range(len(train_cells)):
+                            train_set.extend(prism_pancancer_new_indexes_dict[train_cells[i]])
+                        for i in range(len(validation_cells)):
+                            validation_set.extend(prism_pancancer_new_indexes_dict[validation_cells[i]])
+                    else:
+                        train_cells = list(pancancer_metadata.Cell_line.loc[pancancer_metadata.Cancer_type.isin(list_tumours)].unique())
+                        for i in range(len(train_cells)):
+                            train_set.extend(prism_pancancer_new_indexes_dict[train_cells[i]])
+                        
+                    test_cells = list(pancancer_metadata.Cell_line.loc[pancancer_metadata.Cancer_type == self.to_test].unique())
+                    test_set = []
+                    for i in range(len(test_cells)):
+                        test_set.extend(prism_pancancer_new_indexes_dict[test_cells[i]])
+                    
+                    del pancancer_metadata
+                del prism_pancancer_new_indexes_dict
+                gc.collect()
 
         with open('pickle/Train_set_index.txt', 'w') as f:
             f.write('\n'.join(train_set))
@@ -323,7 +348,9 @@ class Drug_sensitivity_single_cell:
             for i in range(len(values)):
                 barcode, _, ccle, screen, _, sens = values[i].split(',')
                 sens_list.append(str(sens))
-                f.write('\n{},{},{},{},{}'.format(barcode, ccle, screen.split(':::')[0], sens, output[i]))
+                if ':::' in screen:
+                    screen = screen.split(':::')[0]
+                f.write('\n{},{},{},{},{}'.format(barcode, ccle, screen, sens, output[i]))
         
         with open('pickle/{}_set_real_values.txt'.format(type_dataset), 'w') as f:
             f.write('\n'.join(sens_list))
@@ -333,6 +360,7 @@ class Drug_sensitivity_single_cell:
     def initialize_model(self, size_input):
         if self.model_architecture == 'NNet':
             self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            print(self.device)
             self.first_layer = int(size_input)
             model = NN_drug_sensitivity(input_size=self.first_layer,
                                         layers=self.layers_info,
@@ -344,20 +372,17 @@ class Drug_sensitivity_single_cell:
                      'Runs on: {} \n'.format(self.device)]
 
         elif self.model_architecture == 'RF':
-            self.device = 'cpu'
             model = RandomForestRegressor(n_estimators = self.number_trees, criterion = 'mse', random_state = self.seed)
             lines = ['\n*About the network',
                      'Type of network: Random Forest',
-                     'Number of trees: {}'.format(self.number_trees),
-                     'Runs on: {} \n'.format(self.device)]
+                     'Number of trees: {}'.format(self.number_trees),]
 
         elif self.model_architecture == 'lGBM':
-            model = LGBMRegressor(n_estimators=self.number_trees, random_state=self.seed, learning_rate=self.learning_rate, device = "gpu")
-            model.set_params(devide ='gpu', metric = 'mse')
+            model = LGBMRegressor(n_estimators=self.number_trees, random_state=self.seed, learning_rate=self.learning_rate)
+            model.set_params(metric = 'mse')
             lines = ['\n*About the network',
                      'Type of network: Light Gradient Boosted Machine',
-                     'Number of trees: {}'.format(self.number_trees),
-                     'Runs on: {} \n'.format(self.device)]
+                     'Number of trees: {} \n'.format(self.number_trees)]
 
         #save parameters as a pkl file
         if self.run_type != 'resume':
@@ -427,14 +452,14 @@ class Drug_sensitivity_single_cell:
             end_train_model = time.time()
             results['loss_values_training'][epoch] = train_loss_epoch
             results['times_training'][epoch] = end_train_model - start_train_time
-
+            
             # VALIDATION
             start_validation_time = time.time()
             validation_loss_epoch = self.__validation_and_test_nnet__(model, pancancer_bottlenecks, prism_bottlenecks, validation_set_index, 'Validation', seed, epoch)
             end_validation_time = time.time()
             results['loss_values_validation'][epoch] = validation_loss_epoch
             results['times_validation'][epoch] = end_validation_time - start_validation_time
-
+            
             if epoch == 0 or validation_loss_epoch < best_loss[1]:  # means that this model is best one yet
                 best_loss = (train_loss_epoch, validation_loss_epoch)
                 best_model = copy.deepcopy(model.state_dict())
@@ -445,12 +470,12 @@ class Drug_sensitivity_single_cell:
                 n_epochs_not_getting_better = 0
                 pickle.dump(best_model, open('pickle/best_model_parameters.pkl', 'wb'))
                 best_epoch = copy.copy(epoch)
-
+            
             else:
                 self.train_barcodes = []
                 self.validation_barcodes = []
                 n_epochs_not_getting_better += 1
-
+                
             with open('model_values/loss_value_while_running.txt', 'a') as f:
                 f.write('Epoch: {} \n'.format(epoch))
                 f.write('Training loss : {:.2f} \n'.format(train_loss_epoch))
@@ -460,7 +485,7 @@ class Drug_sensitivity_single_cell:
                 f.write('Time (validation): {:.2f} \n'.format(end_validation_time - start_validation_time))
                 f.write('Not getting better for {} epochs. \n'.format(n_epochs_not_getting_better))
                 f.write('\n'.format(n_epochs_not_getting_better))
-
+            
             # decay the learning rate
             decay_learning_rate.step()
 
@@ -469,16 +494,13 @@ class Drug_sensitivity_single_cell:
             if self.early_stop and n_epochs_not_getting_better == self.early_stop:
                 create_report(self.filename_report, ['\nWarning!!! Training stopped because the loss was not improving.'])
                 break
-
+        
         # Saving the results
         results = pd.DataFrame.from_dict(results)
         results.columns = ['Loss_Training', 'Loss_Validation', 'Learning_rates', 'Duration_Training', 'Duration_Validation']
         results.to_csv('Training_Validation_results.txt', header=True, index=True)
 
         model.load_state_dict(best_model)
-        
-        del self.train_barcodes
-        del self.validation_barcodes
 
         print('Training: Done!')
         lines = ['\nTraining loss: {:.2f}'.format(best_loss[0]),
@@ -581,26 +603,16 @@ class Drug_sensitivity_single_cell:
             indexes = f.readlines()
             indexes = [x.strip('\n') for x in indexes]
         
-        inputs = []
-        real_values = []
-        for index in indexes:
-            _, barcode_id, _, _, screen_id, sens = index.split(',')
-            inputs.append(np.concatenate((pancancer_bottlenecks[int(barcode_id)], prism_bottlenecks[int(screen_id)]), axis=None))
-            real_values.append([float(sens)])
-            
+        predictions_complete = []
         model.eval()
         with torch.no_grad():
-            for i in range(0, len(indexes), self.size_batch):
-                inputs = torch.Tensor(inputs[i:int(i + self.size_batch)]).type('torch.FloatTensor').to(self.device)
-                real_values = torch.Tensor(np.array(real_values[i:int(i + self.size_batch)])).type('torch.FloatTensor').to(self.device)
-                predictions = model(inputs)  # output predicted by the model
-                if i == 0:
-                    predictions_complete = predictions.detach().cpu().numpy()
-                else:
-                    predictions_complete = np.concatenate((predictions_complete, predictions.detach().cpu().numpy()), axis=0)
-        
-        with open('pickle/{}_output.txt'.format(type_dataset), 'w') as f:
-            f.write('\n'.join([str(x).strip('[').strip(']') for x in predictions_complete.tolist()]))
+            with open('pickle/{}_output.txt'.format(type_dataset), 'w') as f:
+                for index in indexes:
+                    _, barcode_id, _, _, screen_id, sens = index.split(',')
+                    inputs = torch.Tensor(np.concatenate((pancancer_bottlenecks[int(barcode_id)], prism_bottlenecks[int(screen_id)]), axis=None)).type('torch.FloatTensor').to(self.device)
+                    real_values = torch.Tensor(np.array(float(sens))).type('torch.FloatTensor').to(self.device)
+                    predictions = model(inputs)
+                    f.write('{}\n'.format(str(predictions.detach().cpu().numpy().tolist()[0])))
 
     # --------------------------------------------------
 
@@ -615,22 +627,27 @@ class Drug_sensitivity_single_cell:
                 for i in range(len(barcodes)):
                     X_train.append(np.concatenate((pancancer_bottlenecks[ccle[1][barcodes[i]]], prism_bottlenecks[screen[1]]), axis=None))
                     y_real.append([sens])
-                    self.train_barcodes.append((barcodes[0], ccle[1][barcodes[i]], ccle[0], screen[0], screen[1], sens))
+                    self.train_barcodes.append((barcodes[i], ccle[1][barcodes[i]], ccle[0], screen[0], screen[1], sens))
             else:
                 barcodes = random.sample(list(ccle[1].keys()), k=1)
                 X_train.append(np.concatenate((pancancer_bottlenecks[ccle[1][barcodes[0]]], prism_bottlenecks[screen[1]]), axis=None))
                 y_real.append([sens])
                 self.train_barcodes.append((barcodes[0], ccle[1][barcodes[0]], ccle[0], screen[0], screen[1], sens))
-
+        
         model.fit(np.array(X_train), np.array(y_real))
-
+        
         y_pred = model.predict(X_train)
 
         with open('pickle/Train_output.txt', 'w') as f:
             f.write('\n'.join(['{:f}'.format(x) for x in y_pred.tolist()]))
-        
+
         with open('pickle/Train_set_barcodes.txt', 'w') as f:
-                    f.write('\n'.join([','.join(map(str,x)) for x in self.train_barcodes]))
+            f.write('\n'.join([','.join(map(str,x)) for x in self.train_barcodes]))
+
+        del X_train
+        del y_real
+        del y_pred
+        gc.collect()
 
         return model
 
@@ -651,7 +668,6 @@ class Drug_sensitivity_single_cell:
         if self.model_architecture == 'NNet':
             self.__get_predictions_nnet__(model, pancancer_bottlenecks, prism_bottlenecks, 'Train')
             self.__get_predictions_nnet__(model, pancancer_bottlenecks, prism_bottlenecks, 'Validation')
-        
         self.__save_model(model)
 
         return model
@@ -700,35 +716,29 @@ class Drug_sensitivity_single_cell:
     # --------------------------------------------------
 
     def __run_test_set_rf_or_lgbm(self, model, pancancer_bottlenecks, prism_bottlenecks, test_set_index):        
-        X_test = []
         y_real = []
-        for index in test_set_index:
-            ccle, screen, sens = self.new_indexes2barcode_screen[index]
-            barcodes = list(ccle[1].keys())
-            for i in range(len(barcodes)):
-                X_test.append(np.concatenate((pancancer_bottlenecks[ccle[1][barcodes[i]]], prism_bottlenecks[screen[1]]), axis=None))
-                y_real.append([sens])
-                self.test_barcodes.append((barcodes[0], ccle[1][barcodes[i]], ccle[0], screen[0], screen[1], sens))
-
-        y_pred = model.predict(np.array(X_test))
-
-        del X_test
-        gc.collect()
-
+        y_pred = []
         with open('pickle/Test_output.txt', 'w') as f:
-            f.write('\n'.join(['{:f}'.format(x) for x in y_pred.tolist()]))
-            
-        with open('pickle/Test_set_barcodes.txt', 'w') as f:
-            f.write('\n'.join([','.join(map(str,x)) for x in self.test_barcodes]))
-
-        mse = mean_squared_error(np.array(y_real), y_pred)
+            with open('pickle/Test_set_barcodes.txt', 'w') as file:
+                for index in test_set_index:
+                    ccle, screen, sens = self.new_indexes2barcode_screen[index]
+                    barcodes = list(ccle[1].keys())
+                    X = []
+                    for i in range(len(barcodes)):
+                        X.append(np.concatenate((pancancer_bottlenecks[ccle[1][barcodes[i]]], prism_bottlenecks[screen[1]]), axis=None))
+                        y_real.append([sens])
+                        file.write('{},{},{},{},{},{}\n'.format(barcodes[i], str(ccle[1][barcodes[i]]), ccle[0], screen[0], str(screen[1]), str(sens)))
+                    predicted = model.predict(np.array(X))
+                    y_pred.extend(predicted.tolist())
+                    f.write('\n'.join(['{:f}'.format(x) for x in predicted.tolist()]))
+                    f.write('\n')
+        
+        mse = mean_squared_error(np.array(y_real), np.array(y_pred))
         print('Mean squared error: {:.2f}'.format(mse))
 
         lines = ['\n \nTesting loss: {:.2f}'.format(mse),
                  '\n']
         create_report(self.filename_report, lines)
-
-        return y_pred.tolist()
 
     # --------------------------------------------------
 
@@ -762,17 +772,9 @@ class Drug_sensitivity_single_cell:
    # --------------------------------------------------
 
     def create_filename(self, list_parameters):
-
-        if self.model_architecture == 'NNet':
-            self.layers_info = list_parameters[1].split('_')
-            self.layers_info.append('1')
-            self.perc_val = float(list_parameters[6])
-        filename_output = '{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(list_parameters[16], list_parameters[1], list_parameters[2],
-                                                                          list_parameters[3], list_parameters[4], list_parameters[5],
-                                                                          list_parameters[6], list_parameters[7], list_parameters[8],
-                                                                          list_parameters[9], list_parameters[10], list_parameters[11],
-                                                                          list_parameters[12], list_parameters[13], list_parameters[14])
-        self.filename_report = '{}/{}/output_{}.txt'.format(list_parameters[0], list_parameters[15], filename_output)
+        print(list_parameters)
+        filename_output = '{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(list_parameters[16], list_parameters[1], list_parameters[2], list_parameters[3], list_parameters[4], list_parameters[5], list_parameters[6], list_parameters[7], list_parameters[8], list_parameters[9], list_parameters[10], list_parameters[11], list_parameters[12], list_parameters[13], list_parameters[14], list_parameters[17])
+        self.filename_report = '{}/{}/{}/{}/output_{}.txt'.format(list_parameters[0], list_parameters[15], list_parameters[18], list_parameters[16], filename_output)
         return self.filename_report
 
     # --------------------------------------------------
@@ -787,6 +789,11 @@ class Drug_sensitivity_single_cell:
 
     # --------------------------------------------------
 
+    def get_combination(self):
+        return self.combination
+
+    # --------------------------------------------------
+    
     def save_parameters(self):
         if self.model_architecture == 'NNet':
             layers_info = [str(x) for x in self.layers_info]
@@ -797,12 +804,12 @@ class Drug_sensitivity_single_cell:
                 network_info = '_'.join(layers_info)
             pickle.dump([self.type_data, network_info, np.format_float_positional(self.learning_rate), str(self.size_batch), str(self.n_epochs), str(self.perc_train),
                          str(self.perc_val), str(self.dropout), str(self.gamma), str(self.step_size), str(self.seed), str(self.epoch_reset), self.type_of_split,
-                         str(self.to_test), self.data_from, self.model_architecture], open('pickle/list_initial_parameters_single_cell.pkl', 'wb'))
+                         str(self.to_test), self.data_from, self.model_architecture, self.early_stop, self.combination], open('pickle/list_initial_parameters_single_cell.pkl', 'wb'))
 
         else:
             pickle.dump([self.type_data, str(self.number_trees), np.format_float_positional(self.learning_rate), str(self.size_batch),str(self.n_epochs), str(self.perc_train),
                          str(self.perc_val), str(self.dropout), str(self.gamma), str(self.step_size), str(self.seed), str(self.epoch_reset), self.type_of_split,
-                         str(self.to_test), self.data_from, self.model_architecture], open('pickle/list_initial_parameters_single_cell.pkl', 'wb'))
+                         str(self.to_test), self.data_from, self.model_architecture, self.early_stop, self.combination], open('pickle/list_initial_parameters_single_cell.pkl', 'wb'))
 
 # -------------------------------------------------- RUN --------------------------------------------------
 
@@ -810,7 +817,6 @@ def run_drug_prediction(list_parameters, run_type):
     start_run = time.time()
     print(str(datetime.datetime.now().time()))
     drug_sens = Drug_sensitivity_single_cell()
-    
     
     if run_type == 'resume':
         more_epoch = list_parameters[-2]
@@ -823,12 +829,9 @@ def run_drug_prediction(list_parameters, run_type):
     drug_sens.set_parameters(list_parameters)
     model_architecture = drug_sens.get_model_architecture()
     path_data = drug_sens.get_path_data()
-
+    combination = drug_sens.get_combination()
     
     if run_type == 'start':
-        with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/run.txt', 'a') as f:
-            f.write(filename)
-            f.write('\n')
         train_set_index, validation_set_index, test_set_index = drug_sens.get_indexes()
 
     elif run_type == 'resume':
@@ -844,7 +847,8 @@ def run_drug_prediction(list_parameters, run_type):
             test_set_index = [x.strip('\n') for x in test_set_index]
     
     #load and process the datasets
-    pancancer_bottlenecks = pd.read_csv('{}/single_cell/pancancer_with_alpha_outputs.csv'.format(path_data), header = 0, index_col = 0)
+    pancancer_bottlenecks = pd.read_csv('{}/single_cell/pancancer_{}_bottlenecks.csv'.format(path_data, combination), header = 0, index_col = 0)
+    pancancer_bottlenecks = pancancer_bottlenecks.iloc[:, :-1]
     prism_bottlenecks = pd.read_csv('{}/molecular/run_once/prism_bottlenecks.csv'.format(path_data), header = 0, index_col = 0)
     n_genes = int(pancancer_bottlenecks.shape[1] + prism_bottlenecks.shape[1])
     pancancer_bottlenecks.index.name = 'barcode'
@@ -860,7 +864,6 @@ def run_drug_prediction(list_parameters, run_type):
     
     #train the model
     model_trained = drug_sens.train_model(model, pancancer_bottlenecks, prism_bottlenecks, train_set_index, validation_set_index)
-    
     drug_sens.run_test_set(model_trained, pancancer_bottlenecks, prism_bottlenecks, test_set_index)
 
     #add the predicted values to the final dataset
@@ -923,7 +926,7 @@ def run_drug_prediction(list_parameters, run_type):
 # -------------------------------------------------- INPUT --------------------------------------------------
 
 try:
-    input_values = sys.argv[1]
+    input_values = sys.argv[1:]
     run_type = input_values[-1]
     run_drug_prediction(input_values, run_type)
 

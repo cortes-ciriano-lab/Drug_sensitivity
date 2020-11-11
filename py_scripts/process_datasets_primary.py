@@ -35,10 +35,179 @@ class Process_dataset_pancancer():
         self.depmap2ccle = {}
         self.barcodes_per_cell_line = {}
         self.ohf = OneHotFeaturizer()
-        self.final_ccle_lines = []
-        self.final_dep_map_lines = []
-        self.final_barcodes = []
-        self.prism_screen = kwargs['prism_screen']
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        
+        #from the smilesVAE model
+        self.molecular_model = None
+        self.alpha_m = None
+        self.maximum_length_m = None
+        self.batch_m = None
+        self.dropout_m = None
+        self.ohf = None
+        
+        #from the scVAE model
+        self.run_type = None
+        self.sc_model = None
+        self.batch_sc = None
+        self.dropout_sc = None
+        self.layers_sc = None
+        self.alpha_sc = None
+        self.pathway_sc = None
+        self.num_genes_sc = None
+    
+    # --------------------------------------------------
+    
+    def load_smilesVAE(self):
+        # path = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/trained_models/molecular/'
+        path = '/hps/research1/icortes/acunha/python_scripts/Molecular_vae/best_model'
+        
+        self.alpha_m, _, self.maximum_length_m, self.lr_m, self.batch_m, _, _, _, self.dropout_m, _, _, _, _, _, _ = pickle.load(open('{}/list_initial_parameters_smiles.pkl'.format(path), 'rb'))
+        # self.alpha_m, self.maximum_length_m, _, self.batch_m, _, _, _, self.dropout_m, _, _, _, _, _ = pickle.load(open('{}/list_initial_parameters_molecular.pkl'.format(path), 'rb'))
+        self.batch_m = int(self.batch_m)
+        self.dropout_m = float(self.dropout_m)
+        self.maximum_length_m = int(self.maximum_length_m)
+        self.alpha_m = float(self.alpha_m)
+        self.ohf = OneHotFeaturizer()
+        
+        self.molecular_model = VAE_molecular(number_channels_in=self.maximum_length_m, length_signal_in=len(self.ohf.get_charset()), dropout_prob = self.dropout_m)
+        self.molecular_model.to(self.device)
+        
+        model_parameters = pickle.load(open('{}/molecular_model.pkl'.format(path), 'rb'))
+        self.molecular_model.load_state_dict(model_parameters)
+    
+    # --------------------------------------------------
+    
+    def get_smiles_bottlenecks(self, dataset, valid_compounds):
+        fingerprints_smiles_dicts = {}
+        for k,v in dataset.items():
+            if k in valid_compounds:
+                fp = AllChem.GetMorganFingerprintAsBitVect(Chem.MolFromSmiles(v), 2, nBits=1024)
+                fingerprints_smiles_dicts[k] = {'Morgan_Fingerprint' : '[{}]'.format(','.join([str(x) for x in fp])),
+                                                'Smile' : v}
+        
+        fingerprints_smiles_dicts = pd.DataFrame.from_dict(fingerprints_smiles_dicts, orient = 'index')
+        fingerprints_smiles_dicts.to_csv('{}/molecular/prism_indexes_morgan_fingerprints_smiles.csv'.format(self.path_results), header=True, index=True)
+    
+        mols = self.ohf.featurize(list(fingerprints_smiles_dicts['Smile']), self.maximum_length_m)
+        if True in np.isnan(np.array(mols)):
+            print('there are nan in the dataset!! \n ')
+            sys.exit()
+        
+        self.molecular_model.eval()
+        indexes = list(fingerprints_smiles_dicts.index)
+        bottleneck_complete = []
+        predictions_complete = []
+        valid = 0
+        same = 0
+        invalid_id = []
+        with torch.no_grad():
+            for i in range(0, len(indexes), self.batch_m):
+                smiles = list(fingerprints_smiles_dicts['Smile'].iloc[i:i + self.batch_m])
+                batch = mols[i:i + self.batch_m]
+                inputs = torch.tensor(batch).type('torch.FloatTensor').to(self.device)
+                predictions = self.molecular_model(inputs)
+                bottleneck_complete.extend(predictions[1].cpu().numpy().tolist())
+                output = self.ohf.back_to_smile(predictions[0].cpu().numpy().tolist())
+                predictions_complete.extend(output)
+                for i in range(len(output)):
+                    m = Chem.MolFromSmiles(output[i])
+                    if m is not None:
+                        valid += 1
+                        if m == smiles[i]:
+                            same += 1
+                    else:
+                        invalid_id.append(i)
+                    with open('{}/molecular/run_once/valid_smiles.txt'.format(self.path_results), 'a') as f:
+                        f.write('\n'.join(['Input: {}'.format(smiles[i]), 'Output: {}'.format(output[i]), '\n']))
+                        f.write('\n')
+                    
+        
+        mol_outputs = pd.DataFrame(predictions_complete)
+        mol_outputs.index = indexes
+        mol_outputs.to_csv('{}/molecular/run_once/prism_outputs.csv'.format(self.path_results), header=True, index=True)
+        
+        del predictions_complete
+        del mol_outputs
+        gc.collect()
+        
+        mol_bottlenecks = pd.DataFrame(bottleneck_complete)
+        mol_bottlenecks.index = indexes
+        pickle.dump(mol_bottlenecks, open('{}/molecular/run_once/prism_bottlenecks.pkl'.format(self.path_results), 'wb'))
+        mol_bottlenecks.to_csv('{}/molecular/run_once/prism_bottlenecks.csv'.format(self.path_results), header=True, index=True)
+  
+        del bottleneck_complete
+        del mol_bottlenecks
+        gc.collect()
+        
+        return indexes
+    
+    # --------------------------------------------------
+    
+    def load_scVAE(self, num_genes):
+        path = '/hps/research1/icortes/acunha/python_scripts/single_cell/best_model/pancancer_{}'.format(self.run_type)
+        
+        if self.run_type == 'all_genes_no_pathway' or self.run_type == 'all_genes_canonical_pathways':
+            _, self.batch_sc, _, _, _, self.dropout_sc, _, _, _, _, _, _, _, self.layers_sc, self.alpha_sc, _, self.pathway_sc, self.num_genes_sc = pickle.load(open('{}/list_initial_parameters_single_cell.pkl'.format(path), 'rb'))
+        else:
+            _, self.batch_sc, _, _, _, self.dropout_sc, _, _, _, _, _, _, _, self.layers_sc, self.alpha_sc, _, self.pathway_sc, self.num_genes_sc, _ = pickle.load(open('{}/list_initial_parameters_single_cell.pkl'.format(path), 'rb'))
+        self.batch_sc = int(self.batch_sc)
+        self.dropout_sc = float(self.dropout_sc)
+        self.layers_sc = self.layers_sc.split('_')
+        self.alpha_sc = float(self.alpha_sc)
+        
+        if self.pathway_sc != 'no_pathway':
+            pathways = {'canonical_pathways' : '/hps/research1/icortes/acunha/data/pathways/canonical_pathways/',
+                        'chemical_genetic_perturbations' : '/hps/research1/icortes/acunha/data/pathways/chemical_genetic_perturbations/',
+                        'kegg_pathways' : '/hps/research1/icortes/acunha/data/pathways/kegg_pathways'}
+            list_pathways = pickle.load(open('{}/list_pathways.pkl'.format(pathways[self.pathway]), 'rb'))
+            number_pathways = len(list_pathways)
+            path_matrix_file = '/hps/research1/icortes/acunha/python_scripts/single_cell/data/pathway_matrices/pancancer_matrix_{}_{}_only_values.csv'.format(self.num_genes, self.pathway)
+        else:
+            number_pathways = 0
+            path_matrix_file = ''
+        
+        self.sc_model = VAE_gene_expression_single_cell(dropout_prob=self.dropout_sc, n_genes=num_genes, layers=self.layers_sc, n_pathways = number_pathways, path_matrix = path_matrix_file)
+        self.sc_model.to(self.device)
+        
+        model_parameters = pickle.load(open('{}/single_cell_model.pkl'.format(path), 'rb'))
+        self.sc_model.load_state_dict(model_parameters)
+    
+    # --------------------------------------------------
+    
+    def get_sc_bottlenecks(self, dataset, metadata, indexes):
+        self.sc_model.eval()
+        bottleneck_complete = []
+        with torch.no_grad():
+            for i in range(0, len(indexes), self.batch_sc):
+                list_indexes = indexes[i:i + self.batch_sc]
+                batch = dataset.iloc[i:i + self.batch_sc]
+                inputs = torch.tensor(batch.to_numpy()).type('torch.FloatTensor').to(self.device)
+                predictions = self.sc_model(inputs)
+                output = predictions[0].cpu().numpy().tolist()
+                bottleneck_complete.extend(predictions[1].cpu().numpy().tolist())
+                pathway = predictions[-1].cpu().numpy().tolist()
+                for j in range(len(output)):
+                    output[j] = '{},{}\n'.format(list_indexes[j], ','.join([str(x) for x in output[j]]))
+                with open('{}/single_cell/pancancer_{}_outputs.csv'.format(self.path_results, self.run_type), 'a') as f:
+                    f.write('\n'.join(output))
+                for j in range(len(pathway)):
+                    pathway[j] = '{},{}\n'.format(list_indexes[j], ','.join([str(x) for x in pathway[j]]))
+                with open('{}/single_cell/pancancer_{}_pathways.csv'.format(self.path_results, self.run_type), 'a') as f:
+                    f.write('\n'.join(pathway))
+                    
+        bottleneck_complete = pd.DataFrame(bottleneck_complete)
+        bottleneck_complete.index = indexes
+        cell_lines = []
+        for barcode in indexes:
+            cell_lines.append(metadata.loc[barcode, 'Cell_line'])
+        bottleneck_complete['Cell_line'] = cell_lines
+        bottleneck_complete.to_csv('{}/single_cell/pancancer_{}_bottlenecks.csv'.format(self.path_results, self.run_type), header=True, index=True)
+        pickle.dump(bottleneck_complete, open('{}/single_cell/pancancer_{}_bottlenecks.pkl'.format(self.path_results, self.run_type), 'wb'))
+        
+        del bottleneck_complete
+        del output
+        del pathway
+        gc.collect
     
     # --------------------------------------------------
 
@@ -54,28 +223,12 @@ class Process_dataset_pancancer():
     # --------------------------------------------------
     
     def load_pancancer(self):
-        #gene_expresion :: rows: AAACCTGAGACATAAC-1-18 ; columns: RP11-34P13.7
-        pancancer_data = pickle.load(open('{}/PANCANCER/pancancer_data_7000.pkl'.format(path_data), 'rb'))
-        print('\n Pancancer dataset (after loading)')
-        print(pancancer_data.shape)
-        
         #metadata :: rows: AAACCTGAGACATAAC-1-18 ; Cell_line: NCIH2126_LUNG (CCLE_name)
-        pancancer_metadata= pickle.load(open('{}/PANCANCER/pancancer_metadata_7000.pkl'.format(path_data), 'rb'))
+        pancancer_metadata = pd.read_csv('/hps/research1/icortes/acunha/python_scripts/single_cell/data/pancancer/pancancer_metadata.csv', header = 0, index_col = 0)
         print('\n Pancancer metadata (after loading)')
         print(pancancer_metadata.shape)
-        
-        #filter the cell lines - keep only the ones that have at least 500 genes expressed
-        valid_rows = pancancer_data[pancancer_data > 0].count(axis = 1) > 500
-        pancancer_data = pancancer_data.loc[valid_rows]
-        
-        pancancer_metadata = pancancer_metadata.loc[pancancer_metadata.index.isin(list(pancancer_data.index))]
-        
-        print('\n Pancancer dataset (after filtering the cells that have at least 500 genes expressed)')
-        print(pancancer_data.shape)
-        print('\n Pancancer metadata (after filtering the cells that have at least 500 genes expressed)')
-        print(pancancer_metadata.shape)
-        
-        return pancancer_data, pancancer_metadata
+
+        return pancancer_metadata
     
     # --------------------------------------------------
         

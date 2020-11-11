@@ -18,7 +18,7 @@ check = []
 type_data = sys.argv[1]
 data_from = sys.argv[2]
 type_network = sys.argv[3]
-files = open('loss_results_{}_{}.txt'.format(type_data, data_from),'r')
+files = open('loss_results_{}_{}_{}.txt'.format(type_data, data_from, type_network),'r')
 files = files.readlines()
 for file in files:
     values = open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/{}'.format(file.strip('\n')), 'r')
@@ -61,6 +61,13 @@ for file in files:
         
     except:
         check.append(file)
+    
+    del training_loss
+    del validation_loss
+    del test_loss
+    del train_corr
+    del validation_corr
+    del test_corr
 
 with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/check_cases_{}_{}.txt'.format(type_data, data_from), 'w') as f:
     f.write('\n'.join(check))
@@ -76,7 +83,7 @@ if type_network == 'Neural Network':
     d['Parameters'] = loss_params
     d.dropna(inplace=True)
     d = d.sort_values(['Val_loss_total'])
-    d.to_csv('summary_results_{}_{}.csv'.format(type_data, data_from), header=True, index=False)
+    d.to_csv('summary_results_{}_{}_{}.csv'.format(type_data, data_from, type_network), header=True, index=False)
 else:
     d = pd.DataFrame(test_loss_total, columns = ['Test_loss_total'])
     d['Train_corr_total'] = train_corr_total
@@ -84,7 +91,9 @@ else:
     d['Parameters'] = loss_params
     d.dropna(inplace=True)
     d = d.sort_values(['Test_loss_total'])
-    d.to_csv('summary_results_{}_{}.csv'.format(type_data, data_from), header=True, index=False)
+    d.to_csv('summary_results_{}_{}_{}.csv'.format(type_data, data_from, type_network), header=True, index=False)
+
+print(d)
 
 '''
 indexes_to_keep = []
