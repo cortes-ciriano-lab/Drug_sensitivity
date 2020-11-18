@@ -20,59 +20,64 @@ data_from = sys.argv[2]
 type_network = sys.argv[3]
 files = open('loss_results_{}_{}_{}.txt'.format(type_data, data_from, type_network),'r')
 files = files.readlines()
-for file in files:
-    values = open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/{}'.format(file.strip('\n')), 'r')
-    values = values.readlines()
-    i = 0 #the results start in line 20
-    while i < len(values):
-        line = values[i].strip('\n').split(': ')
+
+if type_network == "NNet":
+    for file in files:
+        values = open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/{}'.format(file.strip('\n')), 'r')
+        values = values.readlines()
+        i = 0 #the results start in line 20
+        while i < len(values):
+            line = values[i].strip('\n').split(': ')
+            
+            if line[0] == 'Training loss':
+                training_loss = float(line[-1])
+            
+            elif line[0] == 'Validation loss':
+                validation_loss = float(line[-1])
+            
+            elif line[0] == 'Testing loss':
+                test_loss = float(line[-1])
+            
+            elif line[0] == 'Training correlation':
+                train_corr = float(line[-1])
+            
+            elif line[0] == 'Validation correlation':
+                validation_corr = float(line[-1])
+            
+            elif line[0] == 'Testing correlation':
+                test_corr = float(line[-1])
+            
+            i+=1
         
-        if line[0] == 'Training loss':
-            training_loss = float(line[-1])
-        
-        elif line[0] == 'Validation loss':
-            validation_loss = float(line[-1])
-        
-        elif line[0] == 'Testing loss':
-            test_loss = float(line[-1])
-        
-        elif line[0] == 'Training correlation':
-            train_corr = float(line[-1])
-        
-        elif line[0] == 'Validation correlation':
-            validation_corr = float(line[-1])
-        
-        elif line[0] == 'Testing correlation':
-            test_corr = float(line[-1])
-        
-        i+=1
-    
-    try:
-        if type_network == 'Neural Network':
+        try:
+            assert training_loss
+            assert validation_loss
+            assert test_loss
+            assert train_corr
+            assert validation_corr
+            assert test_corr
+            
             validation_loss_total.append(validation_loss)
             validation_corr_total.append(validation_corr)
             train_loss_total.append(training_loss)
-        test_loss_total.append(test_loss)
+            test_loss_total.append(test_loss)
+            
+            train_corr_total.append(train_corr)
+            test_corr_total.append(test_corr)
+            
+            loss_params.append(file.split('/')[-1])
+            
+            del training_loss
+            del validation_loss
+            del test_loss
+            del train_corr
+            del validation_corr
+            del test_corr
+            
+        except:
+            check.append(file)
         
-        train_corr_total.append(train_corr)
-        test_corr_total.append(test_corr)
-        
-        loss_params.append(file.split('/')[-1])
-        
-    except:
-        check.append(file)
     
-    del training_loss
-    del validation_loss
-    del test_loss
-    del train_corr
-    del validation_corr
-    del test_corr
-
-with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/check_cases_{}_{}.txt'.format(type_data, data_from), 'w') as f:
-    f.write('\n'.join(check))
-
-if type_network == 'Neural Network':
     d = pd.DataFrame(validation_loss_total, columns = ['Val_loss_total'])
     d['Train_loss_total'] = train_loss_total
     d['Test_loss_total'] = test_loss_total
@@ -82,18 +87,57 @@ if type_network == 'Neural Network':
     d['Difference'] = np.abs(d['Train_loss_total'] - d['Val_loss_total'])
     d['Parameters'] = loss_params
     d.dropna(inplace=True)
-    d = d.sort_values(['Val_loss_total'])
-    d.to_csv('summary_results_{}_{}_{}.csv'.format(type_data, data_from, type_network), header=True, index=False)
+    d = d.sort_values(['Val_loss_total', 'Val_corr_total'], ascending=[True, False])
+    
 else:
+    for file in files:
+        values = open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/{}'.format(file.strip('\n')), 'r')
+        values = values.readlines()
+        i = 0 #the results start in line 20
+        while i < len(values):
+            line = values[i].strip('\n').split(': ')
+            
+            if line[0] == 'Testing loss':
+                test_loss = float(line[-1])
+            
+            elif line[0] == 'Training correlation':
+                train_corr = float(line[-1])
+            
+            elif line[0] == 'Testing correlation':
+                test_corr = float(line[-1])
+            
+            i+=1
+        
+        try:
+            assert test_loss
+            assert train_corr
+            assert test_corr
+            
+            test_loss_total.append(test_loss)
+            train_corr_total.append(train_corr)
+            test_corr_total.append(test_corr)
+            loss_params.append(file.split('/')[-1])
+            
+            del test_loss
+            del train_corr
+            del test_corr
+            
+        except:
+            check.append(file)
+    
     d = pd.DataFrame(test_loss_total, columns = ['Test_loss_total'])
     d['Train_corr_total'] = train_corr_total
     d['Test_corr_total'] = test_corr_total
     d['Parameters'] = loss_params
     d.dropna(inplace=True)
-    d = d.sort_values(['Test_loss_total'])
-    d.to_csv('summary_results_{}_{}_{}.csv'.format(type_data, data_from, type_network), header=True, index=False)
+    d = d.sort_values(['Test_loss_total', 'Test_corr_total'])
+    
+
+with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/check_cases_{}_{}_{}.txt'.format(type_data, data_from, type_network), 'w') as f:
+    f.write('\n'.join(check))
 
 print(d)
+d.to_csv('summary_results_{}_{}_{}.csv'.format(type_data, data_from, type_network), header=True, index=False)
 
 '''
 indexes_to_keep = []

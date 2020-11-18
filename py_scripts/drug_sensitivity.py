@@ -20,9 +20,9 @@ import datetime
 import random
 from lightgbm import LGBMRegressor
 
-from full_network import NN_drug_sensitivity, VAE_molecular, VAE_gene_expression_single_cell
+from full_network import NN_drug_sensitivity
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import RandomizedSearchCV
+from sklearn.linear_model import LinearRegression
 
 
 # -------------------------------------------------- DEFINE SEEDS --------------------------------------------------
@@ -136,7 +136,7 @@ class Drug_sensitivity_single_cell:
             self.layers_info.append('1')
             self.perc_val = float(list_parameters[6])
 
-        elif self.model_architecture == 'RF' or self.model_architecture == 'lGBM':
+        elif self.model_architecture == 'RF' or self.model_architecture == 'lGBM' or self.model_architecture == 'yrandom' or self.model_architecture == 'linear':
             self.number_trees = int(list_parameters[1])
             self.perc_val = 0.0
 
@@ -383,6 +383,18 @@ class Drug_sensitivity_single_cell:
             lines = ['\n*About the network',
                      'Type of network: Light Gradient Boosted Machine',
                      'Number of trees: {} \n'.format(self.number_trees)]
+        
+        elif self.model_architecture == 'yrandom':
+            model = LGBMRegressor(n_estimators=self.number_trees, random_state=self.seed, learning_rate=self.learning_rate)
+            model.set_params(metric = 'mse')
+            lines = ['\n*About the network',
+                     'Type of network: Light Gradient Boosted Machine (Y-scrambling)',
+                     'Number of trees: {} \n'.format(self.number_trees)]
+        
+        elif self.model_architecture == 'linear':
+            model = LinearRegression()
+            lines = ['\n*About the network',
+                     'Type of network: Multiple Linear Regression']
 
         #save parameters as a pkl file
         if self.run_type != 'resume':
@@ -566,35 +578,34 @@ class Drug_sensitivity_single_cell:
                 current_loss = self.__loss_function(real_values, predictions)
                 loss_epoch += current_loss.item()
                 if type_dataset == 'Test':
-                    if i == 0:
-                        predictions_complete = predictions.detach().cpu().numpy()
-                    else:
-                        predictions_complete = np.concatenate((predictions_complete, predictions.detach().cpu().numpy()), axis=0)
+                    with open('pickle/{}_output.txt'.format(type_dataset), 'a') as f:
+                        if i != 0:
+                            f.write('\n')
+                        f.write('\n'.join([str(x[0]) for x in predictions.detach().cpu().numpy().tolist()]))
                 n_batches += 1
             
             if self.extra_barcodes:
                 for extra_i in range(0, len(self.extra_barcodes), self.size_batch):
-                    inputs = self.extra_batches[0][i:int(i + self.size_batch)]
-                    real_values = self.extra_batches[1][i:int(i + self.size_batch)]
+                    inputs = self.extra_batches[0][extra_i:int(extra_i + self.size_batch)]
+                    real_values = self.extra_batches[1][extra_i:int(extra_i + self.size_batch)]
                     inputs = torch.Tensor(inputs).type('torch.FloatTensor').to(self.device)
                     real_values = torch.Tensor(np.array(real_values)).type('torch.FloatTensor').to(self.device)
                     predictions = model(inputs)  # output predicted by the model
                     current_loss = self.__loss_function(real_values, predictions)
                     loss_epoch += current_loss.item()
                     if type_dataset == 'Test':
-                        self.test_barcodes.extend(self.extra_barcodes[i:int(i + self.size_batch)])
-                        predictions_complete = np.concatenate((predictions_complete, predictions.detach().cpu().numpy()), axis=0)
+                        self.test_barcodes.extend(self.extra_barcodes[extra_i:int(extra_i + self.size_batch)])
+                        with open('pickle/{}_output.txt'.format(type_dataset), 'a') as f:
+                            f.write('\n')
+                            f.write('\n'.join([str(x[0]) for x in predictions.detach().cpu().numpy().tolist()]))
                     elif type_dataset == 'Validation':
-                        self.validation_barcodes.extend(self.extra_barcodes[i:int(i + self.size_batch)])
+                        self.validation_barcodes.extend(self.extra_barcodes[extra_i:int(extra_i + self.size_batch)])
                     n_batches += 1
                 self.extra_barcodes = []
                 self.extra_batches = [[],[]]
 
         loss_epoch = loss_epoch / n_batches
-        if type_dataset == 'Test':
-            return loss_epoch, predictions_complete
-        elif type_dataset == 'Validation':
-            return loss_epoch
+        return loss_epoch
         
         # --------------------------------------------------
     
@@ -607,16 +618,19 @@ class Drug_sensitivity_single_cell:
         model.eval()
         with torch.no_grad():
             with open('pickle/{}_output.txt'.format(type_dataset), 'w') as f:
-                for index in indexes:
+                for i in range(len(indexes)):
+                    index = indexes[i]
                     _, barcode_id, _, _, screen_id, sens = index.split(',')
                     inputs = torch.Tensor(np.concatenate((pancancer_bottlenecks[int(barcode_id)], prism_bottlenecks[int(screen_id)]), axis=None)).type('torch.FloatTensor').to(self.device)
                     real_values = torch.Tensor(np.array(float(sens))).type('torch.FloatTensor').to(self.device)
                     predictions = model(inputs)
-                    f.write('{}\n'.format(str(predictions.detach().cpu().numpy().tolist()[0])))
+                    if i != 0:
+                        f.write('\n')
+                    f.write('{}'.format(str(predictions.detach().cpu().numpy().tolist()[0])))
 
     # --------------------------------------------------
 
-    def __train_rf_or_lgbm(self, model, pancancer_bottlenecks, prism_bottlenecks, train_set_index):
+    def __train_rf_or_lgbm_or_linear(self, model, pancancer_bottlenecks, prism_bottlenecks, train_set_index):
         X_train = []
         y_real = []
         
@@ -634,12 +648,24 @@ class Drug_sensitivity_single_cell:
                 y_real.append([sens])
                 self.train_barcodes.append((barcodes[0], ccle[1][barcodes[0]], ccle[0], screen[0], screen[1], sens))
         
+        if self.model_architecture == 'yrandom':
+            y_real = shuffle(y_real)
+        
         model.fit(np.array(X_train), np.array(y_real))
         
         y_pred = model.predict(X_train)
-
-        with open('pickle/Train_output.txt', 'w') as f:
-            f.write('\n'.join(['{:f}'.format(x) for x in y_pred.tolist()]))
+        
+        y_pred = y_pred.tolist()
+        
+        if self.model_architecture == 'linear':
+            lines = ['\n Values of the model: {}'.format(model.get_params()),
+                 '\n']
+            create_report(self.filename_report, lines)
+            with open('pickle/Train_output.txt', 'w') as f:
+                f.write('\n'.join(['{:f}'.format(x[0]) for x in y_pred]))
+        else:
+            with open('pickle/Train_output.txt', 'w') as f:
+                f.write('\n'.join(['{:f}'.format(x) for x in y_pred]))
 
         with open('pickle/Train_set_barcodes.txt', 'w') as f:
             f.write('\n'.join([','.join(map(str,x)) for x in self.train_barcodes]))
@@ -659,8 +685,9 @@ class Drug_sensitivity_single_cell:
         if self.model_architecture == 'NNet':
             model = self.__train_validation_nnet(model, pancancer_bottlenecks, prism_bottlenecks, train_set_index, validation_set_index)
 
-        elif self.model_architecture == 'RF' or self.model_architecture == 'lGBM':
-            model = self.__train_rf_or_lgbm(model, pancancer_bottlenecks, prism_bottlenecks, train_set_index)
+        elif self.model_architecture == 'RF' or self.model_architecture == 'lGBM' or self.model_architecture == 'yrandom' or self.model_architecture == 'linear':
+            model = self.__train_rf_or_lgbm_or_linear(model, pancancer_bottlenecks, prism_bottlenecks, train_set_index)
+        
 
         end_training = time.time()
         create_report(self.filename_report, ['Duration: {:.2f} \n'.format(end_training - start_training)])
@@ -685,7 +712,7 @@ class Drug_sensitivity_single_cell:
         if self.model_architecture == 'NNet':
             model_parameters = copy.deepcopy(model.state_dict())
             pickle.dump(model_parameters, open('pickle/drug_sensitivity_model.pkl', 'wb'))
-        elif self.model_architecture == 'RF' or self.model_architecture == 'lGBM':
+        elif self.model_architecture == 'RF' or self.model_architecture == 'lGBM' or self.model_architecture == 'yrandom' or self.model_architecture == 'linear':
             pickle.dump(model, open('pickle/drug_sensitivity_model.pkl', 'wb'))
 
     # --------------------------------------------------
@@ -694,7 +721,7 @@ class Drug_sensitivity_single_cell:
         if self.model_architecture == 'NNet':
             model_parameters = pickle.load(open('pickle/drug_sensitivity_model.pkl', 'rb'))
             model.load_state_dict(model_parameters)
-        elif self.model_architecture == 'RF' or self.model_architecture == 'lGBM':
+        elif self.model_architecture == 'RF' or self.model_architecture == 'lGBM' or self.model_architecture == 'yrandom' or self.model_architecture == 'linear':
             model = pickle.load(open('pickle/drug_sensitivity_model.pkl', 'rb'))
 
         return model
@@ -702,20 +729,16 @@ class Drug_sensitivity_single_cell:
     # --------------------------------------------------
 
     def __run_test_set_nnet(self, model, pancancer_bottlenecks, prism_bottlenecks, test_set_index):
-        test_loss, test_predictions_complete = self.__validation_and_test_nnet__(model, pancancer_bottlenecks, prism_bottlenecks, test_set_index, 'Test')
-        with open('pickle/Test_output.txt', 'w') as f:
-            f.write('\n'.join([str(x).strip('[').strip(']') for x in test_predictions_complete.tolist()]))
+        test_loss = self.__validation_and_test_nnet__(model, pancancer_bottlenecks, prism_bottlenecks, test_set_index, 'Test')
         with open('pickle/Test_set_barcodes.txt', 'w') as f:
             f.write('\n'.join([','.join(map(str,x)) for x in self.test_barcodes]))
-        
-        del self.test_barcodes
 
         print('Test loss: {:.2f} \n'.format(test_loss))
         create_report(self.filename_report, ['Testing loss: {:.2f}'.format(test_loss)])
 
     # --------------------------------------------------
 
-    def __run_test_set_rf_or_lgbm(self, model, pancancer_bottlenecks, prism_bottlenecks, test_set_index):        
+    def __run_test_set_rf_or_lgbm_or_linear(self, model, pancancer_bottlenecks, prism_bottlenecks, test_set_index):        
         y_real = []
         y_pred = []
         with open('pickle/Test_output.txt', 'w') as f:
@@ -729,8 +752,12 @@ class Drug_sensitivity_single_cell:
                         y_real.append([sens])
                         file.write('{},{},{},{},{},{}\n'.format(barcodes[i], str(ccle[1][barcodes[i]]), ccle[0], screen[0], str(screen[1]), str(sens)))
                     predicted = model.predict(np.array(X))
-                    y_pred.extend(predicted.tolist())
-                    f.write('\n'.join(['{:f}'.format(x) for x in predicted.tolist()]))
+                    predicted = predicted.tolist()
+                    y_pred.extend(predicted)
+                    if self.model_architecture == 'linear':
+                        f.write('\n'.join(['{:f}'.format(x[0]) for x in predicted]))
+                    else:
+                        f.write('\n'.join(['{:f}'.format(x) for x in predicted]))
                     f.write('\n')
         
         mse = mean_squared_error(np.array(y_real), np.array(y_pred))
@@ -745,8 +772,8 @@ class Drug_sensitivity_single_cell:
     def run_test_set(self, model, pancancer_bottlenecks, prism_bottlenecks, test_set_index):
         if self.model_architecture == 'NNet':
             self.__run_test_set_nnet(model, pancancer_bottlenecks, prism_bottlenecks, test_set_index)
-        elif self.model_architecture == 'RF' or self.model_architecture == 'lGBM':
-            self.__run_test_set_rf_or_lgbm(model, pancancer_bottlenecks, prism_bottlenecks, test_set_index)
+        elif self.model_architecture == 'RF' or self.model_architecture == 'lGBM' or self.model_architecture == 'yrandom' or self.model_architecture == 'linear':
+            self.__run_test_set_rf_or_lgbm_or_linear(model, pancancer_bottlenecks, prism_bottlenecks, test_set_index)
 
     # --------------------------------------------------
 
@@ -859,7 +886,7 @@ def run_drug_prediction(list_parameters, run_type):
     #start the Drug Sensitivity model
     if model_architecture == 'NNet':
         model = drug_sens.initialize_model(size_input=n_genes)
-    elif model_architecture == 'RF' or model_architecture == 'lGBM':
+    elif model_architecture == 'RF' or model_architecture == 'lGBM' or model_architecture == 'yrandom' or model_architecture == 'linear':
         model = drug_sens.initialize_model(size_input=[])
     
     #train the model
@@ -889,7 +916,7 @@ def run_drug_prediction(list_parameters, run_type):
     #correlation matrices
     if model_architecture == 'NNet':
         type_dataset = ['Train', 'Validation', 'Test']
-    elif model_architecture == 'RF' or model_architecture == 'lGBM':
+    elif model_architecture == 'RF' or model_architecture == 'lGBM' or model_architecture == 'yrandom' or model_architecture == 'linear':
         type_dataset = ['Train', 'Test']
 
     for i in range(len(type_dataset)):

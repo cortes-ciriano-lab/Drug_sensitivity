@@ -11,16 +11,17 @@
 #NNet
 run_type="start"
 type_data="secondary"
-for model in "lGBM" ; do #"RF" "NNet" "lGBM"
+for model in "NNet" "lGBM" "yrandom" "linear" ; do #"RF" "NNet" "lGBM" "yrandom" "linear"
 	if [ "${model}" == "NNet" ] ;  then
 		perc_train="0.7"
 		perc_val="0.15"
-		model_info="128_128_128 256_256_128_64 256_128_64 128_128_128 512_256_128 64_32 128_128_64 128_64_32_16 64_32_16"
-		memory=10G
-		types_learning_rates="non_cyclical cyclical"
-		dropout_rates="0.2 0.3 0.1 0.0"
-		early_stop_options="no yes-80"
-	elif [ "${model}" == "RF" ] || [ "${model}" == "lGBM" ] ; then
+		model_info="128_128_64" # 128_64_32_16 64_32_16" #"128_128_128 256_256_128_64 256_128_64 64_32 128_128_64 128_64_32_16 64_32_16"
+		#memory=30G
+		types_learning_rates="cyclical" #"non_cyclical cyclical"
+		dropout_rates="0.1"
+		early_stop_options="yes-80" #"no yes-80"
+		lr_values="0.00001 0.00005"
+	elif [ "${model}" == "RF" ] || [ "${model}" == "lGBM" ] || [ "${model}" == "yrandom" ] ; then
 		perc_train="0.7"
 		perc_val="0.3"
 		model_info="100"
@@ -28,8 +29,18 @@ for model in "lGBM" ; do #"RF" "NNet" "lGBM"
 		types_learning_rates="cyclical"
 		dropout_rates="0.0"
 		early_stop_options="no"
+		lr_values="0.00001 0.000001 0.1 0.001 0.01 0.0001 0.05 0.5"
+	elif [ "${model}" == "linear" ] ; then
+		perc_train="0.7"
+		perc_val="0.3"
+		model_info="0"
+		memory=10G
+		types_learning_rates="cyclical"
+		dropout_rates="0.0"
+		early_stop_options="no"
+		lr_values="0.0"
 	fi
-	for lr in "0.00001" "0.000001" "0.1" "0.001" "0.01" "0.0001" "0.05" "0.5" ; do #
+	for lr in $lr_values ; do #
 		for size_batch in "64" ; do
 			for n_epoch in "1000" ; do
 				for type_lr in $types_learning_rates ; do 
@@ -58,23 +69,35 @@ for model in "lGBM" ; do #"RF" "NNet" "lGBM"
 													combination="${num_genes}_${pathway}"
 													for type_split in "random" "leave-one-cell-line-out" "leave-one-tumour-out" ; do #
 														if [ "${sc_from}" == "pancancer" ] && [ "${type_split}" == "leave-one-cell-line-out" ] ; then
+															memory=15G
 															file_lines="/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/${prism_from}/prism_${sc_from}/prism_pancancer_cell_lines_pancancer.txt"
 														elif [ "${sc_from}" == "pancancer" ] && [ "${type_split}" == "leave-one-tumour-out" ] ; then
+															memory=30G
 															file_lines="/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/${prism_from}/prism_${sc_from}/prism_pancancer_tumours.txt"
 														elif [ "${sc_from}" == "pancancer" ] && [ "${type_split}" == "random" ] ; then
+															memory=30G
 															echo "${perc_val}" > "/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/${prism_from}/prism_${sc_from}/random_value_split.txt"
 															file_lines="/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/${prism_from}/prism_${sc_from}/random_value_split.txt"
 														fi
 														for to_test in `cat ${file_lines}` ; do
-															mkdir -p "/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/new_results/"
-															mkdir -p "/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/new_results/${type_data}"
-															mkdir -p "/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/new_results/${type_data}/${data_from}"
-															mkdir -p "/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/new_results/${type_data}/${data_from}/${combination}"
-															mkdir -p "/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/new_results/${type_data}/${data_from}/${combination}/${model}"
-															mkdir -p "/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/new_results/${type_data}/${data_from}/${combination}/${model}/${model}_${network_info}_${lr}_${size_batch}_${n_epoch}_${perc_train}_${perc_val}_${dropout}_${gam}_${step}_${seed}_${epoch_reset}_${type_split}_${to_test}_${type_lr}_${early_stop}" && cd $_
-															mkdir -p pickle model_values plots
-															bgmod -L 30 /$job_group
-															bsub -g /$job_group -P gpu -gpu - -M $memory -e e.log -o o.log -J drug_sec "python /hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/py_scripts/drug_sensitivity.py $type_data $network_info $lr $size_batch $n_epoch $perc_train $perc_val $dropout $gam $step $seed $epoch_reset $type_split $to_test $type_lr $data_from $model $early_stop $combination $run_type"
+															FILE="/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/new_results/${type_data}/${data_from}/${combination}/${model}/output_${model}_${network_info}_${lr}_${size_batch}_${n_epoch}_${perc_train}_${perc_val}_${dropout}_${gam}_${step}_${seed}_${epoch_reset}_${type_split}_${to_test}_${type_lr}_${early_stop}.txt"
+															if [ -f "$FILE" ]; then
+																echo "$FILE exists."
+															else
+																mkdir -p "/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/new_results/"
+																mkdir -p "/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/new_results/${type_data}"
+																mkdir -p "/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/new_results/${type_data}/${data_from}"
+																mkdir -p "/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/new_results/${type_data}/${data_from}/${combination}"
+																mkdir -p "/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/new_results/${type_data}/${data_from}/${combination}/${model}"
+																mkdir -p "/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/new_results/${type_data}/${data_from}/${combination}/${model}/${model}_${network_info}_${lr}_${size_batch}_${n_epoch}_${perc_train}_${perc_val}_${dropout}_${gam}_${step}_${seed}_${epoch_reset}_${type_split}_${to_test}_${type_lr}_${early_stop}" && cd $_
+																mkdir -p pickle model_values plots
+																#bgmod -L 40 /$job_group
+																if [ "${model}" == "NNet" ] ;  then
+																	bsub -g /$job_group -P gpu -gpu - -M $memory -e e.log -o o.log -J drug_sec "python /hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/py_scripts/drug_sensitivity.py $type_data $network_info $lr $size_batch $n_epoch $perc_train $perc_val $dropout $gam $step $seed $epoch_reset $type_split $to_test $type_lr $data_from $model $early_stop $combination $run_type"
+																else
+																	bsub -g /$job_group -M $memory -e e.log -o o.log -J drug_sec "python /hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/py_scripts/drug_sensitivity.py $type_data $network_info $lr $size_batch $n_epoch $perc_train $perc_val $dropout $gam $step $seed $epoch_reset $type_split $to_test $type_lr $data_from $model $early_stop $combination $run_type"
+																fi	
+															fi
 														done
 													done
 												done

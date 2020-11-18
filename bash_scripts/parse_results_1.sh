@@ -4,7 +4,7 @@ cd /hps/research1/icortes/acunha/python_scripts/Drug_sensitivity
 
 type="secondary" #"primary single_cell"
 for type_data in $type ; do
-    for type_network in "lGBM" "NNet" ; do
+    for type_network in "lGBM" ; do #"NNet" "lGBM" "yrandom" "linear" ; do
         if [ "${type}" == "secondary" ] ;  then
             data_from="pancancer_ic50"
         elif [ "${type}" == "single_cell" ] || [ "${type}" == "primary" ] ; then
