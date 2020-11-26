@@ -14,14 +14,15 @@ import sys
 import torch.utils.data
 import matplotlib.pyplot as plt
 from scipy.stats import pearsonr
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import accuracy_score, mean_squared_error, confusion_matrix, roc_curve, auc, precision_score, recall_score, f1_score
 import os
 import datetime
 import random
-from lightgbm import LGBMRegressor
+import seaborn as sns
 
+from lightgbm import LGBMRegressor
 from full_network import NN_drug_sensitivity
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LinearRegression
 
 
@@ -50,6 +51,57 @@ def make_correlation_plot(real_data, predicted_data, type_data):
     plt.xlabel('Real_data')
     plt.ylabel('Predicted_data')
     plt.savefig('plots/Scatter_real_vs_predicted_values_{}.png'.format(type_data))
+
+# --------------------------------------------------
+
+def calculate_metrics(predicted_probs, real_data, predicted_data, type_data, filename):
+    # ROC AUC value - Inactive
+    active = predicted_probs[:, 1]
+    fpr, tpr, thresholds = roc_curve(real_data, active)
+    roc_auc = auc(fpr, tpr)
+    plt.figure(figsize=(8, 6))
+    plt.title('Drug activity - Active')
+    plt.plot(fpr, tpr, 'y', label='AUC = {:.2f}'.format(roc_auc))
+    plt.legend(loc='lower right')
+    plt.plot([0, 1], [0, 1], 'r--')
+    plt.xlim([0, 1])
+    plt.ylim([0, 1])
+    plt.ylabel('True Positive Rate')
+    plt.xlabel('False Positive Rate')
+    plt.savefig('plots/ROC_AUC_{}.png'.format(type_data), bbox_inches='tight')
+
+    # accuracy (number of correctly predicted data points out of all the data points)
+    # + precision (true positives over true positives plus false positives)
+    # + recall (true positives over true positives plus false negatives)
+    # + f1 score (combines precision and recall)
+    lines = ['\nAccuracy: {}'.format(accuracy_score(real_data, predicted_data)),
+             'Precision: {}'.format(precision_score(real_data, predicted_data)),
+             'Recall: {}'.format(recall_score(real_data, predicted_data)),
+             'F1 score: {}\n'.format(f1_score(real_data, predicted_data))]
+
+    # confusion matrix
+    conf_matrix = confusion_matrix(real_data, predicted_data)
+    class_names = ['Inactive', 'Active']
+    plt.figure(figsize=(8, 6))
+    cm = pd.DataFrame(conf_matrix, columns=class_names, index=class_names)
+    sns.heatmap(cm, annot=True)
+    plt.xlabel('Predicted label')
+    plt.ylabel('True label')
+    plt.title('Confusion Matrix (number)')
+    plt.savefig('plots/Confusion_matrix_number_{}.png'.format(type_data))
+
+    matrix = conf_matrix.astype('float') / conf_matrix.sum(axis=1)[:, np.newaxis]
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(matrix, annot=True, annot_kws={'size': 10}, linewidths=0.2)
+    tick_marks = np.arange(len(class_names)) + 0.5
+    plt.xticks(tick_marks, class_names, rotation=0)
+    plt.yticks(tick_marks, class_names, rotation=0)
+    plt.xlabel('Predicted label')
+    plt.ylabel('True label')
+    plt.title('Confusion Matrix (%)')
+    plt.savefig('plots/Confusion_matrix_{}.png'.format(type_data))
+
+    create_report(filename, lines)
 
 # -------------------------------------------------- DRUG SENSITIVITY --------------------------------------------------
 
@@ -147,15 +199,14 @@ class Drug_sensitivity_single_cell:
         #     self.epoch_reset = self.n_epochs
         #     self.step_size = self.n_epochs
 
-        if self.type_data == 'primary':
-            self.path_data = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_primary'
-            self.ccle2depmap_dict = pickle.load(open('{}/prism_pancancer/ccle2depmap_dict.pkl'.format(self.path_data), 'rb'))
-            self.new_indexes2barcode_screen = pickle.load(open('{}/prism_pancancer/prism_pancancer_new_indexes_once_newIndex2barcodeScreen_dict.pkl'.format(self.path_data), 'rb'))
-        elif self.type_data == 'secondary':
-            self.prism_from = self.data_from.split('_')[-1]
-            self.data_from = self.data_from.split('_')[0]
+        self.prism_from = self.data_from.split('_')[-1]
+        self.data_from = self.data_from.split('_')[0]
+        if self.model_architecture != 'RF':
             self.path_data = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/{}'.format(self.prism_from)
             self.new_indexes2barcode_screen = pickle.load(open('{}/prism_pancancer/prism_pancancer_new_indexes_newIndex2barcodeScreen_dict.pkl'.format(self.path_data), 'rb'))
+        else:
+            self.path_data = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/{}'.format(self.prism_from)
+            self.new_indexes2barcode_screen = pickle.load(open('{}/prism_pancancer/prism_pancancer_new_indexes_newIndex2barcodeScreen_dict_classification.pkl'.format(self.path_data), 'rb'))
 
         global seed
         if seed != self.seed:
@@ -300,7 +351,7 @@ class Drug_sensitivity_single_cell:
         sensitivity = []
         for index in indexes:
             ccle, screen, sens = self.new_indexes2barcode_screen[index]
-            if self.prism_from == 'ic50' and sens >= 7 and type_dataset != 'Test':
+            if sens >= 7 and type_dataset != 'Test':
                 barcodes = random.sample(list(ccle[1].keys()), k=6)
                 data.append(np.concatenate((pancancer_bottlenecks[ccle[1][barcodes[0]]], prism_bottlenecks[screen[1]]), axis=None))
                 sensitivity.append([sens])
@@ -308,7 +359,7 @@ class Drug_sensitivity_single_cell:
                     self.extra_batches[0].append(np.concatenate((pancancer_bottlenecks[ccle[1][barcodes[i]]], prism_bottlenecks[screen[1]]), axis=None))
                     self.extra_batches[1].append([sens])
                     self.extra_barcodes.append((barcodes[i], ccle[1][barcodes[i]], ccle[0], screen[0], screen[1], sens))
-            elif self.prism_from == 'ic50' and type_dataset == 'Test':
+            elif type_dataset == 'Test':
                 barcodes = list(ccle[1].keys())
                 data.append(np.concatenate((pancancer_bottlenecks[ccle[1][barcodes[0]]], prism_bottlenecks[screen[1]]), axis=None))
                 sensitivity.append([sens])
@@ -347,10 +398,14 @@ class Drug_sensitivity_single_cell:
             f.write(','.join(['barcode', 'cell_line', 'screen_id', 'real_sensitivity', 'predicted_sensitivity']))
             for i in range(len(values)):
                 barcode, _, ccle, screen, _, sens = values[i].split(',')
-                sens_list.append(str(sens))
                 if ':::' in screen:
                     screen = screen.split(':::')[0]
-                f.write('\n{},{},{},{},{}'.format(barcode, ccle, screen, sens, output[i]))
+                if self.model_architecture != 'RF':
+                    sens_list.append(str(sens))
+                    f.write('\n{},{},{},{},{}'.format(barcode, ccle, screen, sens, output[i]))
+                else:
+                    sens_list.append('1' if sens == 'Active' else '0')
+                    f.write('\n{},{},{},{},{}'.format(barcode, ccle, screen, sens, 'Active' if output[i] == '1' else 'Inactive'))
         
         with open('pickle/{}_set_real_values.txt'.format(type_dataset), 'w') as f:
             f.write('\n'.join(sens_list))
@@ -372,7 +427,7 @@ class Drug_sensitivity_single_cell:
                      'Runs on: {} \n'.format(self.device)]
 
         elif self.model_architecture == 'RF':
-            model = RandomForestRegressor(n_estimators = self.number_trees, criterion = 'mse', random_state = self.seed)
+            model = RandomForestClassifier(n_estimators = self.number_trees, random_state = self.seed)
             lines = ['\n*About the network',
                      'Type of network: Random Forest',
                      'Number of trees: {}'.format(self.number_trees),]
@@ -607,7 +662,7 @@ class Drug_sensitivity_single_cell:
         loss_epoch = loss_epoch / n_batches
         return loss_epoch
         
-        # --------------------------------------------------
+    # --------------------------------------------------
     
     def __get_predictions_nnet__(self, model, pancancer_bottlenecks, prism_bottlenecks, type_dataset):
         with open('pickle/{}_set_barcodes.txt'.format(type_dataset), 'r') as f:
@@ -636,7 +691,7 @@ class Drug_sensitivity_single_cell:
         
         for index in train_set_index:
             ccle, screen, sens = self.new_indexes2barcode_screen[index]
-            if self.prism_from == 'ic50' and sens >= 7:
+            if self.model_architecture != 'RF' and self.prism_from == 'ic50' and sens >= 7:
                 barcodes = random.sample(list(ccle[1].keys()), k=6)
                 for i in range(len(barcodes)):
                     X_train.append(np.concatenate((pancancer_bottlenecks[ccle[1][barcodes[i]]], prism_bottlenecks[screen[1]]), axis=None))
@@ -650,6 +705,8 @@ class Drug_sensitivity_single_cell:
         
         if self.model_architecture == 'yrandom':
             y_real = shuffle(y_real)
+        elif self.model_architecture == 'RF':
+            y_real = [[1] if x[0] == 'Active' else [0] for x in y_real]
         
         model.fit(np.array(X_train), np.array(y_real))
         
@@ -663,6 +720,13 @@ class Drug_sensitivity_single_cell:
             create_report(self.filename_report, lines)
             with open('pickle/Train_output.txt', 'w') as f:
                 f.write('\n'.join(['{:f}'.format(x[0]) for x in y_pred]))
+        
+        elif self.model_architecture == 'RF':
+            predicted_probs = model.predict_proba(X_train)
+            calculate_metrics(predicted_probs, np.array(y_real), np.array(y_pred), 'Train', self.filename_report)
+            
+            with open('pickle/Train_output.txt', 'w') as f:
+                    f.write('\n'.join(['{}'.format(x) for x in y_pred]))
         else:
             with open('pickle/Train_output.txt', 'w') as f:
                 f.write('\n'.join(['{:f}'.format(x) for x in y_pred]))
@@ -741,6 +805,7 @@ class Drug_sensitivity_single_cell:
     def __run_test_set_rf_or_lgbm_or_linear(self, model, pancancer_bottlenecks, prism_bottlenecks, test_set_index):        
         y_real = []
         y_pred = []
+        predicted_probs_total = []
         with open('pickle/Test_output.txt', 'w') as f:
             with open('pickle/Test_set_barcodes.txt', 'w') as file:
                 for index in test_set_index:
@@ -754,18 +819,27 @@ class Drug_sensitivity_single_cell:
                     predicted = model.predict(np.array(X))
                     predicted = predicted.tolist()
                     y_pred.extend(predicted)
+
                     if self.model_architecture == 'linear':
                         f.write('\n'.join(['{:f}'.format(x[0]) for x in predicted]))
+                    elif self.model_architecture == 'RF':
+                        predicted_probs = model.predict_proba(np.array(X))
+                        predicted_probs_total.extend(predicted_probs.tolist())
+                        
+                        f.write('\n'.join(['{}'.format(x) for x in predicted]))
                     else:
                         f.write('\n'.join(['{:f}'.format(x) for x in predicted]))
                     f.write('\n')
-        
-        mse = mean_squared_error(np.array(y_real), np.array(y_pred))
-        print('Mean squared error: {:.2f}'.format(mse))
-
-        lines = ['\n \nTesting loss: {:.2f}'.format(mse),
-                 '\n']
-        create_report(self.filename_report, lines)
+        if self.model_architecture != 'RF':
+            mse = mean_squared_error(np.array(y_real), np.array(y_pred))
+            print('Mean squared error: {:.2f}'.format(mse))
+    
+            lines = ['\n \nTesting loss: {:.2f}'.format(mse),
+                     '\n']
+            create_report(self.filename_report, lines)
+        else:
+            y_real = [[1] if x[0] == 'Active' else [0] for x in y_real]
+            calculate_metrics(np.array(predicted_probs_total), np.array(y_real), np.array(y_pred), 'Test', self.filename_report)
 
     # --------------------------------------------------
 
@@ -799,7 +873,6 @@ class Drug_sensitivity_single_cell:
    # --------------------------------------------------
 
     def create_filename(self, list_parameters):
-        print(list_parameters)
         filename_output = '{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(list_parameters[16], list_parameters[1], list_parameters[2], list_parameters[3], list_parameters[4], list_parameters[5], list_parameters[6], list_parameters[7], list_parameters[8], list_parameters[9], list_parameters[10], list_parameters[11], list_parameters[12], list_parameters[13], list_parameters[14], list_parameters[17])
         self.filename_report = '{}/{}/{}/{}/output_{}.txt'.format(list_parameters[0], list_parameters[15], list_parameters[18], list_parameters[16], filename_output)
         return self.filename_report
@@ -916,8 +989,10 @@ def run_drug_prediction(list_parameters, run_type):
     #correlation matrices
     if model_architecture == 'NNet':
         type_dataset = ['Train', 'Validation', 'Test']
-    elif model_architecture == 'RF' or model_architecture == 'lGBM' or model_architecture == 'yrandom' or model_architecture == 'linear':
+    elif model_architecture == 'lGBM' or model_architecture == 'yrandom' or model_architecture == 'linear':
         type_dataset = ['Train', 'Test']
+    else:
+        type_dataset = []
 
     for i in range(len(type_dataset)):
         with open('pickle/{}_output.txt'.format(type_dataset[i]), 'r') as f:

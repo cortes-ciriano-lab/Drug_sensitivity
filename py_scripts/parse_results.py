@@ -12,13 +12,16 @@ train_loss_total = []
 validation_corr_total = []
 test_corr_total = []
 train_corr_total = []
+test_f1_total = []
+train_f1_total = []
 loss_params = []
 
 check = []
 type_data = sys.argv[1]
 data_from = sys.argv[2]
 type_network = sys.argv[3]
-files = open('loss_results_{}_{}_{}.txt'.format(type_data, data_from, type_network),'r')
+combination = sys.argv[4]
+files = open('loss_results_{}_{}_{}_{}.txt'.format(type_data, data_from, type_network, combination),'r')
 files = files.readlines()
 
 if type_network == "NNet":
@@ -88,7 +91,77 @@ if type_network == "NNet":
     d['Parameters'] = loss_params
     d.dropna(inplace=True)
     d = d.sort_values(['Val_loss_total', 'Val_corr_total'], ascending=[True, False])
-    
+
+elif type_network == 'RF':
+    for file in files:
+        values = open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/{}'.format(file.strip('\n')), 'r')
+        values = values.readlines()
+        i = 0
+        while i < len(values):
+            line = values[i].strip('\n').split(': ')
+            if line[0] == 'Number of trees':
+                train_line = values[i+2].strip('\n').split(': ')
+                assert train_line[0] == 'Precision'
+                train_precision = float(train_line[-1])
+                
+                train_line = values[i+3].strip('\n').split(': ')
+                assert train_line[0] == 'Recall'
+                train_recall = float(train_line[-1])
+                
+                train_line = values[i+4].strip('\n').split(': ')
+                assert train_line[0] == 'F1 score'
+                train_f1 = float(train_line[-1])
+                
+                test_line = values[i+8].strip('\n').split(': ')
+                assert test_line[0] == 'Precision'
+                test_precision = float(test_line[-1])
+                
+                test_line = values[i+9].strip('\n').split(': ')
+                assert test_line[0] == 'Recall'
+                test_recall = float(test_line[-1])
+                
+                test_line = values[i+10].strip('\n').split(': ')
+                assert test_line[0] == 'F1 score'
+                test_f1 = float(test_line[-1])
+                break
+            
+            else:
+                i+=1
+        
+        try:
+            assert train_precision
+            assert train_recall
+            assert train_f1
+            assert test_precision
+            assert test_recall
+            assert test_f1
+            
+            train_loss_total.append(train_precision)
+            train_corr_total.append(train_recall)
+            train_f1_total.appemd(train_f1)
+            test_loss_total.append(test_precision)
+            test_corr_total.append(test_recall)
+            test_f1_total.append(test_f1)
+            loss_params.append(file.split('/')[-1])
+            
+            del train_precision
+            del train_recall
+            del train_f1
+            del test_precision
+            del test_recall
+            del test_f1
+            
+        except:
+            check.append(file)
+    d = pd.DataFrame(test_corr_total, columns = ['Test_recall'])
+    d['Test_precision'] = test_loss_total
+    d['Test_F1'] = test_f1_total
+    d['Train_recall'] = train_corr_total
+    d['Train_precision'] = train_loss_total
+    d['Train_F1'] = train_f1_total
+    d['Parameters'] = loss_params
+    d.dropna(inplace=True)
+    d = d.sort_values(['Test_F1', 'Test_recall', 'Test_precision'], ascending = False)
 else:
     for file in files:
         values = open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/{}'.format(file.strip('\n')), 'r')
@@ -133,33 +206,8 @@ else:
     d = d.sort_values(['Test_loss_total', 'Test_corr_total'])
     
 
-with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/check_cases_{}_{}_{}.txt'.format(type_data, data_from, type_network), 'w') as f:
+with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/check_cases_{}_{}_{}_{}.txt'.format(type_data, data_from, type_network, combination), 'w') as f:
     f.write('\n'.join(check))
 
 print(d)
-d.to_csv('summary_results_{}_{}_{}.csv'.format(type_data, data_from, type_network), header=True, index=False)
-
-'''
-indexes_to_keep = []
-for i in list(d.index):
-    # if d['Val_loss_total'].loc[i] < 0.58 or '0.00001' in d['Parameters'].loc[i]:
-    if d['Val_loss_total'].loc[i] <= 0.05:
-        indexes_to_keep.append(i)
-best_parameters = d.loc[indexes_to_keep]
-print(best_parameters)
-
-jobs_already_resumed = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/trained_models/jobs_resumed.pkl', 'rb'))
-jobs_to_resume = []
-for file in list(best_parameters['Parameters']):
-    new_file = file.strip('output_')[:-5]
-    # new_file = new_file.strip('.txt')
-    print(new_file)
-    new_file = 'new_results/{}/{}/{}'.format(type_data, data_from, new_file)
-    if new_file not in jobs_already_resumed:
-        jobs_to_resume.append(new_file)
-        jobs_already_resumed.append(new_file)
-
-with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/jobs_to_resume.txt', 'w') as f:
-    f.write('\n'.join(jobs_to_resume))
-pickle.dump(jobs_already_resumed, open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/trained_models/jobs_resumed.pkl', 'wb'))
-'''
+d.to_csv('summary_results_{}_{}_{}_{}.csv'.format(type_data, data_from, type_network, combination), header=True, index=False)

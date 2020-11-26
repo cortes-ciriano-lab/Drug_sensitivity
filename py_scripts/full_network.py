@@ -6,6 +6,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from MaskedLinear import MaskedLinear
+
 # -------------------------------------------------- DEFINE SEEDS --------------------------------------------------
 
 seed = 42
