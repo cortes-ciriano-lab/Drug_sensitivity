@@ -26,6 +26,7 @@ files = files.readlines()
 
 if type_network == "NNet":
     for file in files:
+        print(file)
         values = open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/{}'.format(file.strip('\n')), 'r')
         values = values.readlines()
         i = 0 #the results start in line 20
@@ -94,6 +95,7 @@ if type_network == "NNet":
 
 elif type_network == 'RF':
     for file in files:
+        print(file)
         values = open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/{}'.format(file.strip('\n')), 'r')
         values = values.readlines()
         i = 0
@@ -164,6 +166,7 @@ elif type_network == 'RF':
     d = d.sort_values(['Test_F1', 'Test_recall', 'Test_precision'], ascending = False)
 else:
     for file in files:
+        print(file)
         values = open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/{}'.format(file.strip('\n')), 'r')
         values = values.readlines()
         i = 0 #the results start in line 20
@@ -205,9 +208,9 @@ else:
     d.dropna(inplace=True)
     d = d.sort_values(['Test_loss_total', 'Test_corr_total'])
     
-
-with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/check_cases_{}_{}_{}_{}.txt'.format(type_data, data_from, type_network, combination), 'w') as f:
-    f.write('\n'.join(check))
+if len(check) >= 1:
+    with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/check_cases_{}_{}_{}_{}.txt'.format(type_data, data_from, type_network, combination), 'w') as f:
+        f.write('\n'.join(check))
 
 print(d)
 d.to_csv('summary_results_{}_{}_{}_{}.csv'.format(type_data, data_from, type_network, combination), header=True, index=False)

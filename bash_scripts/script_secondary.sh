@@ -11,7 +11,7 @@
 #NNet
 run_type="start"
 type_data="secondary"
-for model in "RF" "lGBM" "yrandom" "linear" ; do # "RF" "lGBM" "yrandom" "linear" "NNet"
+for model in "NNet" ; do # "NNet" "RF" "lGBM" "yrandom" "linear"
 	for prism_from in "ic50" ; do #"ic50" "auc"
 		if [ "${prism_from}" == "ic50" ] ;  then
 			job_group="drug_sec_ic50_${model}"
@@ -21,9 +21,9 @@ for model in "RF" "lGBM" "yrandom" "linear" ; do # "RF" "lGBM" "yrandom" "linear
 		sc_from="pancancer"
 		data_from="pancancer_${prism_from}"
 		if [ "${model}" == "NNet" ] ;  then
-			bgmod -L 10 /$job_group
+			bgmod -L 15 /$job_group
 		else
-			bgmod -L 50 /$job_group
+			bgmod -L 40 /$job_group
 		fi
 		if [ "${model}" == "NNet" ] ;  then
 			perc_train="0.7"
@@ -32,7 +32,7 @@ for model in "RF" "lGBM" "yrandom" "linear" ; do # "RF" "lGBM" "yrandom" "linear
 			types_learning_rates="cyclical" #"non_cyclical cyclical"
 			dropout_rates="0.1"
 			early_stop_options="yes-80" #"no yes-80"
-			lr_values="0.00001 0.00005"
+			lr_values="0.00001"
 			total_epochs="1000"
 		elif [ "${model}" == "RF" ] || [ "${model}" == "lGBM" ] || [ "${model}" == "yrandom" ] || [ "${model}" == "linear" ] ; then
 			perc_train="0.7"
@@ -46,7 +46,7 @@ for model in "RF" "lGBM" "yrandom" "linear" ; do # "RF" "lGBM" "yrandom" "linear
 				lr_values="0.0"
 				model_info="0"
 			else
-				lr_values="0.00001 0.000001 0.1 0.001 0.01 0.0001 0.05 0.5"
+				lr_values="0.1 0.01 0.05 0.5"
 				model_info="100"
 			fi	
 		fi
@@ -67,8 +67,8 @@ for model in "RF" "lGBM" "yrandom" "linear" ; do # "RF" "lGBM" "yrandom" "linear
 								for seed in "42" ; do
 									for network_info in $model_info ; do
 										for early_stop in $early_stop_options ; do
-											for pathway in "no_pathway" "canonical_pathways" "kegg_pathways" "chemical_genetic_perturbations" ; do #"no_pathway" "canonical_pathways" "kegg_pathways" "chemical_genetic_perturbations" 
-												for num_genes in "best_7000" ; do #"best_7000" "all_genes"
+											for pathway in "kegg_pathways" "chemical_genetic_perturbations" "no_pathway" "canonical_pathways" ; do #
+												for num_genes in "best_7000" "all_genes"; do #"best_7000" "all_genes"
 													combination="${num_genes}_${pathway}"
 													for type_split in "random" "leave-one-cell-line-out" "leave-one-tumour-out" ; do #
 														if [ "${sc_from}" == "pancancer" ] && [ "${type_split}" == "leave-one-cell-line-out" ] ; then
@@ -95,7 +95,7 @@ for model in "RF" "lGBM" "yrandom" "linear" ; do # "RF" "lGBM" "yrandom" "linear
 																	if [ "${type_split}" == "leave-one-cell-line-out" ] ; then
 																		memory=15G
 																	else
-																		memory=30G
+																		memory=20G
 																	fi
 																	bsub -g /$job_group -P gpu -gpu - -M $memory -e e.log -o o.log -J drug_sec "python /hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/py_scripts/drug_sensitivity.py $type_data $network_info $lr $size_batch $n_epoch $perc_train $perc_val $dropout $gam $step $seed $epoch_reset $type_split $to_test $type_lr $data_from $model $early_stop $combination $run_type"
 																else

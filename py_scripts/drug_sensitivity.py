@@ -154,8 +154,6 @@ class Drug_sensitivity_single_cell:
         self.train_barcodes = []
         self.validation_barcodes = []
         self.test_barcodes = []
-        self.extra_batches = [[], []]
-        self.extra_barcodes = []
 
     # --------------------------------------------------
 
@@ -260,6 +258,9 @@ class Drug_sensitivity_single_cell:
                 train_set = final_indexes[:train_number]
                 validation_set = final_indexes[train_number:train_number+validation_number]
                 test_set = final_indexes[train_number+validation_number:]
+            
+            elif self.type_of_split == 'leave-one-drug-out':
+                drug2indexes = pickle.load(open('{}/prism_pancancer/prism_pancancer_drug2indexes_dict.pkl'.format(self.path_data), 'rb'))
 
             else:
                 #common cell lines between the prism dataset and pancancer
@@ -353,29 +354,27 @@ class Drug_sensitivity_single_cell:
             ccle, screen, sens = self.new_indexes2barcode_screen[index]
             if sens >= 7 and type_dataset != 'Test':
                 barcodes = random.sample(list(ccle[1].keys()), k=6)
-                data.append(np.concatenate((pancancer_bottlenecks[ccle[1][barcodes[0]]], prism_bottlenecks[screen[1]]), axis=None))
-                sensitivity.append([sens])
-                for i in range(len(barcodes[1:])):
-                    self.extra_batches[0].append(np.concatenate((pancancer_bottlenecks[ccle[1][barcodes[i]]], prism_bottlenecks[screen[1]]), axis=None))
-                    self.extra_batches[1].append([sens])
-                    self.extra_barcodes.append((barcodes[i], ccle[1][barcodes[i]], ccle[0], screen[0], screen[1], sens))
+                for i in range(len(barcodes)):
+                    data.append(np.concatenate((pancancer_bottlenecks[ccle[1][barcodes[i]]], prism_bottlenecks[screen[0]]), axis=None))
+                    sensitivity.append([sens])
+                    if type_dataset == 'Train':
+                        self.train_barcodes.append((barcodes[i], ccle[1][barcodes[i]], ccle[0], screen[1], screen[0], sens))
+                    elif type_dataset == 'Validation':
+                        self.validation_barcodes.append((barcodes[i], ccle[1][barcodes[i]], ccle[0], screen[1], screen[0], sens))
             elif type_dataset == 'Test':
                 barcodes = list(ccle[1].keys())
-                data.append(np.concatenate((pancancer_bottlenecks[ccle[1][barcodes[0]]], prism_bottlenecks[screen[1]]), axis=None))
-                sensitivity.append([sens])
-                self.test_barcodes.append((barcodes[0], ccle[1][barcodes[0]], ccle[0], screen[0], screen[1], sens))
-                for i in range(len(barcodes[1:])):
-                    self.extra_batches[0].append(np.concatenate((pancancer_bottlenecks[ccle[1][barcodes[i]]], prism_bottlenecks[screen[1]]), axis=None))
-                    self.extra_batches[1].append([sens])
-                    self.extra_barcodes.append((barcodes[i], ccle[1][barcodes[i]], ccle[0], screen[0], screen[1], sens))
+                for i in range(len(barcodes)):
+                    data.append(np.concatenate((pancancer_bottlenecks[ccle[1][barcodes[i]]], prism_bottlenecks[screen[0]]), axis=None))
+                    sensitivity.append([sens])
+                    self.test_barcodes.append((barcodes[i], ccle[1][barcodes[i]], ccle[0], screen[1], screen[0], sens))
             else:
                 barcodes = random.sample(list(ccle[1].keys()), k=1)
-                data.append(np.concatenate((pancancer_bottlenecks[ccle[1][barcodes[0]]], prism_bottlenecks[screen[1]]), axis=None))
+                data.append(np.concatenate((pancancer_bottlenecks[ccle[1][barcodes[0]]], prism_bottlenecks[screen[0]]), axis=None))
                 sensitivity.append([sens])
-            if type_dataset == 'Train':
-                self.train_barcodes.append((barcodes[0], ccle[1][barcodes[0]], ccle[0], screen[0], screen[1], sens))
-            elif type_dataset == 'Validation':
-                self.validation_barcodes.append((barcodes[0], ccle[1][barcodes[0]], ccle[0], screen[0], screen[1], sens))
+                if type_dataset == 'Train':
+                    self.train_barcodes.append((barcodes[0], ccle[1][barcodes[0]], ccle[0], screen[1], screen[0], sens))
+                elif type_dataset == 'Validation':
+                    self.validation_barcodes.append((barcodes[0], ccle[1][barcodes[0]], ccle[0], screen[1], screen[0], sens))
 
         if epoch > 0:
             self.set_seed(self.seed)
@@ -530,18 +529,17 @@ class Drug_sensitivity_single_cell:
             if epoch == 0 or validation_loss_epoch < best_loss[1]:  # means that this model is best one yet
                 best_loss = (train_loss_epoch, validation_loss_epoch)
                 best_model = copy.deepcopy(model.state_dict())
-                with open('pickle/Train_set_barcodes.txt', 'w') as f:
-                    f.write('\n'.join([','.join(map(str,x)) for x in self.train_barcodes]))
-                with open('pickle/Validation_set_barcodes.txt', 'w') as f:
-                    f.write('\n'.join([','.join(map(str,x)) for x in self.validation_barcodes]))
+                self.best_train_barcodes = self.train_barcodes
+                self.best_validation_barcodes = self.validation_barcodes
                 n_epochs_not_getting_better = 0
                 pickle.dump(best_model, open('pickle/best_model_parameters.pkl', 'wb'))
                 best_epoch = copy.copy(epoch)
             
             else:
-                self.train_barcodes = []
-                self.validation_barcodes = []
                 n_epochs_not_getting_better += 1
+            
+            self.train_barcodes = []
+            self.validation_barcodes = []
                 
             with open('model_values/loss_value_while_running.txt', 'a') as f:
                 f.write('Epoch: {} \n'.format(epoch))
@@ -595,24 +593,6 @@ class Drug_sensitivity_single_cell:
             optimizer.step()
             train_loss_epoch += train_current_loss.item()
             n_batches += 1
-        
-        if self.extra_barcodes:
-            for extra_i in range(0, len(self.extra_barcodes), self.size_batch):
-                inputs = self.extra_batches[0][extra_i:int(extra_i + self.size_batch)]
-                real_values = self.extra_batches[1][extra_i:int(extra_i + self.size_batch)]
-                inputs = torch.Tensor(inputs).type('torch.FloatTensor').to(self.device)
-                real_values = torch.Tensor(np.array(real_values)).type('torch.FloatTensor').to(self.device)
-                optimizer.zero_grad()
-                train_predictions = model(inputs) 
-                train_current_loss = self.__loss_function(real_values, train_predictions)
-                train_current_loss.backward() 
-                torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
-                optimizer.step()
-                train_loss_epoch += train_current_loss.item()
-                self.train_barcodes.extend(self.extra_barcodes[extra_i:int(extra_i + self.size_batch)])
-                n_batches += 1
-            self.extra_barcodes = []
-            self.extra_batches = [[],[]]
 
         train_loss_epoch = train_loss_epoch / n_batches
 
@@ -638,26 +618,6 @@ class Drug_sensitivity_single_cell:
                             f.write('\n')
                         f.write('\n'.join([str(x[0]) for x in predictions.detach().cpu().numpy().tolist()]))
                 n_batches += 1
-            
-            if self.extra_barcodes:
-                for extra_i in range(0, len(self.extra_barcodes), self.size_batch):
-                    inputs = self.extra_batches[0][extra_i:int(extra_i + self.size_batch)]
-                    real_values = self.extra_batches[1][extra_i:int(extra_i + self.size_batch)]
-                    inputs = torch.Tensor(inputs).type('torch.FloatTensor').to(self.device)
-                    real_values = torch.Tensor(np.array(real_values)).type('torch.FloatTensor').to(self.device)
-                    predictions = model(inputs)  # output predicted by the model
-                    current_loss = self.__loss_function(real_values, predictions)
-                    loss_epoch += current_loss.item()
-                    if type_dataset == 'Test':
-                        self.test_barcodes.extend(self.extra_barcodes[extra_i:int(extra_i + self.size_batch)])
-                        with open('pickle/{}_output.txt'.format(type_dataset), 'a') as f:
-                            f.write('\n')
-                            f.write('\n'.join([str(x[0]) for x in predictions.detach().cpu().numpy().tolist()]))
-                    elif type_dataset == 'Validation':
-                        self.validation_barcodes.extend(self.extra_barcodes[extra_i:int(extra_i + self.size_batch)])
-                    n_batches += 1
-                self.extra_barcodes = []
-                self.extra_batches = [[],[]]
 
         loss_epoch = loss_epoch / n_batches
         return loss_epoch
@@ -665,17 +625,22 @@ class Drug_sensitivity_single_cell:
     # --------------------------------------------------
     
     def __get_predictions_nnet__(self, model, pancancer_bottlenecks, prism_bottlenecks, type_dataset):
-        with open('pickle/{}_set_barcodes.txt'.format(type_dataset), 'r') as f:
-            indexes = f.readlines()
-            indexes = [x.strip('\n') for x in indexes]
-        
+        if type_dataset == 'Train':
+            indexes = self.best_train_barcodes
+            with open('pickle/Train_set_barcodes.txt', 'w') as f:
+                f.write('\n'.join([','.join(map(str,x)) for x in self.best_train_barcodes]))
+        else:
+            indexes = self.best_validation_barcodes
+            with open('pickle/Validation_set_barcodes.txt', 'w') as f:
+                f.write('\n'.join([','.join(map(str,x)) for x in self.best_validation_barcodes]))
+                
         predictions_complete = []
         model.eval()
         with torch.no_grad():
             with open('pickle/{}_output.txt'.format(type_dataset), 'w') as f:
                 for i in range(len(indexes)):
                     index = indexes[i]
-                    _, barcode_id, _, _, screen_id, sens = index.split(',')
+                    _, barcode_id, _, _, screen_id, sens = index
                     inputs = torch.Tensor(np.concatenate((pancancer_bottlenecks[int(barcode_id)], prism_bottlenecks[int(screen_id)]), axis=None)).type('torch.FloatTensor').to(self.device)
                     real_values = torch.Tensor(np.array(float(sens))).type('torch.FloatTensor').to(self.device)
                     predictions = model(inputs)
@@ -694,14 +659,14 @@ class Drug_sensitivity_single_cell:
             if self.model_architecture != 'RF' and self.prism_from == 'ic50' and sens >= 7:
                 barcodes = random.sample(list(ccle[1].keys()), k=6)
                 for i in range(len(barcodes)):
-                    X_train.append(np.concatenate((pancancer_bottlenecks[ccle[1][barcodes[i]]], prism_bottlenecks[screen[1]]), axis=None))
+                    X_train.append(np.concatenate((pancancer_bottlenecks[ccle[1][barcodes[i]]], prism_bottlenecks[screen[0]]), axis=None))
                     y_real.append([sens])
-                    self.train_barcodes.append((barcodes[i], ccle[1][barcodes[i]], ccle[0], screen[0], screen[1], sens))
+                    self.train_barcodes.append((barcodes[i], ccle[1][barcodes[i]], ccle[0], screen[1], screen[0], sens))
             else:
                 barcodes = random.sample(list(ccle[1].keys()), k=1)
-                X_train.append(np.concatenate((pancancer_bottlenecks[ccle[1][barcodes[0]]], prism_bottlenecks[screen[1]]), axis=None))
+                X_train.append(np.concatenate((pancancer_bottlenecks[ccle[1][barcodes[0]]], prism_bottlenecks[screen[0]]), axis=None))
                 y_real.append([sens])
-                self.train_barcodes.append((barcodes[0], ccle[1][barcodes[0]], ccle[0], screen[0], screen[1], sens))
+                self.train_barcodes.append((barcodes[0], ccle[1][barcodes[0]], ccle[0], screen[1], screen[0], sens))
         
         if self.model_architecture == 'yrandom':
             y_real = shuffle(y_real)
@@ -813,9 +778,9 @@ class Drug_sensitivity_single_cell:
                     barcodes = list(ccle[1].keys())
                     X = []
                     for i in range(len(barcodes)):
-                        X.append(np.concatenate((pancancer_bottlenecks[ccle[1][barcodes[i]]], prism_bottlenecks[screen[1]]), axis=None))
+                        X.append(np.concatenate((pancancer_bottlenecks[ccle[1][barcodes[i]]], prism_bottlenecks[screen[0]]), axis=None))
                         y_real.append([sens])
-                        file.write('{},{},{},{},{},{}\n'.format(barcodes[i], str(ccle[1][barcodes[i]]), ccle[0], screen[0], str(screen[1]), str(sens)))
+                        file.write('{},{},{},{},{},{}\n'.format(barcodes[i], str(ccle[1][barcodes[i]]), ccle[0], screen[1], str(screen[0]), str(sens)))
                     predicted = model.predict(np.array(X))
                     predicted = predicted.tolist()
                     y_pred.extend(predicted)
@@ -904,12 +869,12 @@ class Drug_sensitivity_single_cell:
                 network_info = '_'.join(layers_info)
             pickle.dump([self.type_data, network_info, np.format_float_positional(self.learning_rate), str(self.size_batch), str(self.n_epochs), str(self.perc_train),
                          str(self.perc_val), str(self.dropout), str(self.gamma), str(self.step_size), str(self.seed), str(self.epoch_reset), self.type_of_split,
-                         str(self.to_test), self.data_from, self.model_architecture, self.early_stop, self.combination], open('pickle/list_initial_parameters_single_cell.pkl', 'wb'))
+                         str(self.to_test), self.type_lr, self.data_from, self.model_architecture, self.early_stop, self.combination], open('pickle/list_initial_parameters_single_cell.pkl', 'wb'))
 
         else:
             pickle.dump([self.type_data, str(self.number_trees), np.format_float_positional(self.learning_rate), str(self.size_batch),str(self.n_epochs), str(self.perc_train),
                          str(self.perc_val), str(self.dropout), str(self.gamma), str(self.step_size), str(self.seed), str(self.epoch_reset), self.type_of_split,
-                         str(self.to_test), self.data_from, self.model_architecture, self.early_stop, self.combination], open('pickle/list_initial_parameters_single_cell.pkl', 'wb'))
+                         str(self.to_test), self.type_lr, self.data_from, self.model_architecture, self.early_stop, self.combination], open('pickle/list_initial_parameters_single_cell.pkl', 'wb'))
 
 # -------------------------------------------------- RUN --------------------------------------------------
 

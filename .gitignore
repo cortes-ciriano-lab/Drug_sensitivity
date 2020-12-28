@@ -1,3 +1,10 @@
+py_scripts/drug_sensitivity_only_one.py
+correct_data.sh
+create_finished.sh
+finished.txt
+old_data_secondary/
+old_new_results/
+py_scripts/correct_cases.py
 loss*
 summary*
 do_not_delete_old_data/
