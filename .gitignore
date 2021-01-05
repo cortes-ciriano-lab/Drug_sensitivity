@@ -1,4 +1,6 @@
-py_scripts/drug_sensitivity_only_one.py
+check_results.py
+data_gdsc/
+new_results_gdsc/
 correct_data.sh
 create_finished.sh
 finished.txt
@@ -31,10 +33,6 @@ check_cases_single_cell.txt
 jobs_resumed.pkl
 jobs_to_resume.txt
 just_in_case/
-loss_results_single_cell_pancancer.txt
-summary_results.csv
 test.txt
 *.log
-check_cases_secondary_pancancer_ic50.txt
-loss_results_secondary_pancancer_ic50.txt
-summary_results_secondary_pancancer_ic50.csv
+check_cases*
