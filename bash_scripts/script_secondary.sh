@@ -11,7 +11,7 @@
 #NNet
 run_type="start"
 type_data="secondary"
-for model in "RF" "lGBM" "yrandom" "linear" ; do # "NNet" "RF" "lGBM" "yrandom" "linear"
+for model in "lGBM" ; do # "NNet" "RF" "lGBM" "yrandom" "linear"
 	for prism_from in "ic50" ; do #"ic50" "auc"
 		if [ "${prism_from}" == "ic50" ] ;  then
 			job_group="drug_sec_ic50_${model}"

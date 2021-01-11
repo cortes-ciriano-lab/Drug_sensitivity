@@ -2,10 +2,14 @@
 
 #run before: activar_rdkit
 rm -r data_gdsc
-rm o_gdsc.log e_gdsc.log
-values_from="ic50" # "auc" "ic50"
-for drug_from in "gdsc" ; do # "gdsc" "prism"
-    for sc_from in "pancancer" ; do
+rm *.log
+for drug_from in "gdsc_ctrp" ; do #"gdsc_ctrp" "gdsc" "prism"
+    if ["${drug_from}" == "gdsc_ctrp"] ; then
+        values_from="auc"
+    else
+        values_from="ic50"
+    fi
+    for sc_from in "integrated" ; do #"pancancer" "integrated"
         mkdir -p data_gdsc/
         mkdir -p data_gdsc/${sc_from}_${drug_from}_${values_from}
         mkdir -p data_gdsc/${sc_from}_${drug_from}_${values_from}/molecular/

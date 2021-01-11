@@ -4,7 +4,7 @@
 #NNet
 run_type="start"
 type_data="secondary"
-for model in "linear" ; do # "lGBM" "yrandom" "linear" "NNet"
+for model in "NNet" ; do # "lGBM" "yrandom" "linear" "NNet"
 	for drug_from in "gdsc" ; do
 		sc_from="pancancer"
 		data_from="${drug_from}_${sc_from}"
@@ -73,7 +73,7 @@ for model in "linear" ; do # "lGBM" "yrandom" "linear" "NNet"
 															echo "1 2 3 4 5 6 7" > "/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc/${sc_from}_${drug_from}_ic50/random_list.txt"
 															file_lines="/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc/${sc_from}_${drug_from}_ic50/random_list.txt"
 														fi
-														for to_test in `cat ${file_lines}` ; do
+														for to_test in `head -1 ${file_lines}` ; do
 															FILE="/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/new_results_gdsc/${data_from}/${combination}/${model}/output_${model}_${network_info}_${lr}_${size_batch}_${n_epoch}_${perc_train}_${perc_val}_${dropout}_${gam}_${step}_${seed}_${epoch_reset}_${type_split}_${to_test}_${type_lr}_${early_stop}.txt"
 															if [ -f "$FILE" ]; then
 																echo "$FILE exists."

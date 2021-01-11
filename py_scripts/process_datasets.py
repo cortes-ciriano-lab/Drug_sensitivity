@@ -157,7 +157,7 @@ class Process_dataset():
     
     # --------------------------------------------------
     
-    def load_scVAE(self, num_genes):
+    def load_scVAE_pancancer(self, num_genes):
         if self.sc_from == 'pancancer':
             path = '/hps/research1/icortes/acunha/python_scripts/single_cell/best_model/pancancer_{}'.format(self.run_type)
             
@@ -295,6 +295,48 @@ class Process_dataset():
         
         drug_metadata = pd.read_csv('{}/GDSC/gdsc_metadata.csv'.format(path_data), index_col=0)
         drug_metadata.index = drug_metadata.index.astype(str)
+        lines = ['\n GDSC dataset (after loading) \n{}'.format(drug_data.shape)]
+        create_report(self.path_results, lines)
+        print(lines)
+        
+        # filter the smiles - the metadata has been already filtered for nan values, so now: standardise the smiles (1) and check if the standardised smile is compatible with the molecular VAE (2)
+        new_matrix = {}
+        for i in range(drug_metadata.shape[0]):
+            smile = drug_metadata.Smiles.iloc[i]
+            drug_id = drug_metadata.iloc[i].name
+            name = drug_metadata.Name.iloc[i]
+            if ',' in smile:  # means that exists more than one smile representation of the compound
+                smiles = smile.split(',')
+            else:
+                smiles = [smile]
+            standard_smiles = []  # (2)
+            for s in smiles:
+                try:
+                    mol = standardise.run(s)
+                    standard_smiles.append(mol)
+                except standardise.StandardiseException:
+                    pass
+            valid_smiles = check_valid_smiles(standard_smiles, 120)  # (3)
+            if valid_smiles:
+                if len(valid_smiles) > 1:
+                    for j in range(len(valid_smiles)):
+                        new_matrix['{}:::{}'.format(drug_id, j)] = {'drug_id':drug_id, 'name':name, 'smile':valid_smiles[j]}
+                elif len(valid_smiles) == 1:
+                    new_matrix[drug_id] = {'drug_id':drug_id, 'name':name, 'smile':valid_smiles[0]}
+        new_matrix = pd.DataFrame.from_dict(new_matrix, orient='index')
+        new_matrix.index = new_matrix.index.astype(str)
+        lines = ['\n GDSC dataset (after filtering the valid smiles) \n{}'.format(drug_data.shape)]
+        create_report(self.path_results, lines)
+        print(lines)
+        
+        return drug_data, new_matrix, list(drug_data.index.unique())
+    
+    # --------------------------------------------------
+    
+    def load_gdsc_ctrp(self):
+        drug_data = pd.read_csv('{}/GDSC_CTRP/drugcell_all.txt'.format(path_data), header = None, sep = '\t')
+        drug_data.columns = ['cell_line', 'smiles', 'auc']
+        
         lines = ['\n GDSC dataset (after loading) \n{}'.format(drug_data.shape)]
         create_report(self.path_results, lines)
         print(lines)
