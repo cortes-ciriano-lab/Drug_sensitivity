@@ -268,9 +268,9 @@ class Drug_sensitivity_single_cell:
                 j = 0
                 for i in range(0, len(final_indexes), int(len(final_indexes)/7)):
                     if j+1 == int(self.to_test):
-                        test_set.extend(final_indexes[i:i+len(final_indexes)/7])
+                        test_set.extend(final_indexes[i:int(i+len(final_indexes)/7)])
                     else:
-                        other_set.extend(final_indexes[i:i+len(final_indexes)/7])
+                        other_set.extend(final_indexes[i:int(i+len(final_indexes)/7)])
                     j += 1
                 
                 train_set = other_set[:-len(test_set)]

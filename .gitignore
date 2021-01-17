@@ -1,3 +1,6 @@
+data_gdsc_ctrp/
+new_results_gdsc_ctrp/
+validate_results/
 check_results.py
 data_gdsc/
 new_results_gdsc/

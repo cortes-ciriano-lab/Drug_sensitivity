@@ -1,16 +1,16 @@
 #!/bin/bash
 
 #run before: activar_rdkit
-rm -r data_gdsc
+#rm -r data_gdsc_ctrp
 
-for sc_from in "pancancer" "integrated"; do
-    rm o_gdsc_ctrp_${sc_from}.log e_gdsc_ctrp_${sc_from}.log
+for sc_from in "integrated" ; do #"pancancer" "integrated"
+    #rm o_gdsc_ctrp_${sc_from}.log e_gdsc_ctrp_${sc_from}.log
     mkdir -p data_gdsc_ctrp/
     mkdir -p data_gdsc_ctrp/${sc_from}
     mkdir -p data_gdsc_ctrp/${sc_from}/molecular/
     mkdir -p data_gdsc_ctrp/${sc_from}/single_cell/
     if [ "${model}" == "pancancer" ] ; then
-        memory="20G"
+        memory="10G"
     else
         memory="150G"
     fi

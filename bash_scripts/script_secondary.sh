@@ -11,7 +11,7 @@
 #NNet
 run_type="start"
 type_data="secondary"
-for model in "lGBM" ; do # "NNet" "RF" "lGBM" "yrandom" "linear"
+for model in "NNet" ; do # "NNet" "RF" "lGBM" "yrandom" "linear"
 	for prism_from in "ic50" ; do #"ic50" "auc"
 		if [ "${prism_from}" == "ic50" ] ;  then
 			job_group="drug_sec_ic50_${model}"
@@ -21,9 +21,9 @@ for model in "lGBM" ; do # "NNet" "RF" "lGBM" "yrandom" "linear"
 		sc_from="pancancer"
 		data_from="pancancer_${prism_from}"
 		if [ "${model}" == "NNet" ] ;  then
-			bgmod -L 2 /$job_group
+			bgmod -L 20 /$job_group
 		else
-			bgmod -L 60 /$job_group
+			bgmod -L 100 /$job_group
 		fi
 		if [ "${model}" == "NNet" ] ;  then
 			perc_train="0.7"
@@ -33,7 +33,7 @@ for model in "lGBM" ; do # "NNet" "RF" "lGBM" "yrandom" "linear"
 			dropout_rates="0.1"
 			early_stop_options="yes-80" #"no yes-80"
 			lr_values="0.00001"
-			total_epochs="500"
+			total_epochs="1000"
 		elif [ "${model}" == "RF" ] || [ "${model}" == "lGBM" ] || [ "${model}" == "yrandom" ] || [ "${model}" == "linear" ] ; then
 			perc_train="0.7"
 			perc_val="0.3"
@@ -67,10 +67,10 @@ for model in "lGBM" ; do # "NNet" "RF" "lGBM" "yrandom" "linear"
 								for seed in "42" ; do
 									for network_info in $model_info ; do
 										for early_stop in $early_stop_options ; do
-											for pathway in "kegg_pathways" "chemical_genetic_perturbations" "no_pathway" "canonical_pathways" ; do #"kegg_pathways" "chemical_genetic_perturbations" "no_pathway" "canonical_pathways"
-												for num_genes in "best_7000" "all_genes" ; do #"best_7000" "all_genes"
+											for pathway in "no_pathway" "kegg_pathways" "canonical_pathways" "chemical_genetic_perturbations" ; do # "kegg_pathways" "chemical_genetic_perturbations" "no_pathway" "canonical_pathways"
+												for num_genes in "all_genes" "best_7000" ; do #"best_7000" "all_genes"
 													combination="${num_genes}_${pathway}"
-													for type_split in "random" "random7" "leave-one-cell-line-out" "leave-one-tumour-out" "leave-one-drug-out" ; do #
+													for type_split in "random" "random7" "leave-one-cell-line-out" "leave-one-tumour-out" "leave-one-drug-out" ; do # "random" "random7" "leave-one-cell-line-out" "leave-one-tumour-out" "leave-one-drug-out"
 														if [ "${sc_from}" == "pancancer" ] && [ "${type_split}" == "leave-one-cell-line-out" ] ; then
 															file_lines="/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_secondary/${prism_from}/prism_${sc_from}/prism_pancancer_cell_lines_pancancer.txt"
 														elif [ "${sc_from}" == "pancancer" ] && [ "${type_split}" == "leave-one-tumour-out" ] ; then
@@ -97,12 +97,9 @@ for model in "lGBM" ; do # "NNet" "RF" "lGBM" "yrandom" "linear"
 																mkdir -p "/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/new_results/${type_data}/${data_from}/${combination}/${model}/${model}_${network_info}_${lr}_${size_batch}_${n_epoch}_${perc_train}_${perc_val}_${dropout}_${gam}_${step}_${seed}_${epoch_reset}_${type_split}_${to_test}_${type_lr}_${early_stop}" && cd $_
 																mkdir -p pickle model_values plots
 																if [ "${model}" == "NNet" ] ;  then
-																	if [ "${type_split}" == "leave-one-cell-line-out" ] ; then
-																		memory=15G
-																	else
-																		memory=20G
-																	fi
+																	memory=10G
 																	bsub -g /$job_group -P gpu -gpu - -M $memory -e e.log -o o.log -J drug_sec "python /hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/py_scripts/drug_sensitivity.py $type_data $network_info $lr $size_batch $n_epoch $perc_train $perc_val $dropout $gam $step $seed $epoch_reset $type_split $to_test $type_lr $data_from $model $early_stop $combination $run_type"
+																	#bsub -g /$job_group -M $memory -e e.log -o o.log -J drug_sec "python /hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/py_scripts/drug_sensitivity.py $type_data $network_info $lr $size_batch $n_epoch $perc_train $perc_val $dropout $gam $step $seed $epoch_reset $type_split $to_test $type_lr $data_from $model $early_stop $combination $run_type"
 																else
 																	if [ "${model}" == "RF" ] ;  then
 																		memory=25G

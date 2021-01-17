@@ -3,15 +3,15 @@
 
 #NNet
 run_type="start"
-for model in "lGBM" ; do # "lGBM" "yrandom" "linear" "NNet"
-	for sc_from in "pancancer" "integrated"; do
+for model in "lGBM" "NNet" ; do # "lGBM" "yrandom" "linear" "NNet"
+	for sc_from in "integrated"; do #"pancancer" "integrated"
 		drug_from="gdsc_ctrp"
 		data_from="${drug_from}_${sc_from}"
 		job_group="drug_${data_from}_${model}"
 		if [ "${model}" == "NNet" ] ;  then
 			bgmod -L 30 /$job_group
 		else
-			bgmod -L 20 /$job_group
+			bgmod -L 50 /$job_group
 		fi
 		if [ "${model}" == "NNet" ] ;  then
 			perc_train="0.7"
@@ -21,7 +21,7 @@ for model in "lGBM" ; do # "lGBM" "yrandom" "linear" "NNet"
 			dropout_rates="0.1"
 			early_stop_options="yes-80"
 			lr_values="0.00001"
-			total_epochs="1000"
+			total_epochs="500"
 		elif [ "${model}" == "lGBM" ] || [ "${model}" == "yrandom" ] || [ "${model}" == "linear" ] ; then
 			perc_train="0.7"
 			perc_val="0.3"
@@ -57,7 +57,7 @@ for model in "lGBM" ; do # "lGBM" "yrandom" "linear" "NNet"
 											for pathway in "no_pathway" ; do
 												for num_genes in "all_genes" ; do
 													combination="${num_genes}_${pathway}"
-													for type_split in "random" "random7" "leave-one-tumour-out" "leave-one-drug-out" "leave-one-cell-line-out" ; do #  
+													for type_split in "random" "random7" "leave-one-tumour-out" "leave-one-drug-out" "leave-one-cell-line-out" ; do # "random" "random7" "leave-one-tumour-out" "leave-one-drug-out" "leave-one-cell-line-out"
 														if [ "${type_split}" == "leave-one-cell-line-out" ] ; then
 															file_lines="/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/${sc_from}/${drug_from}_${sc_from}_cell_lines.txt"
 														elif [ "${type_split}" == "leave-one-tumour-out" ] ; then
@@ -85,6 +85,7 @@ for model in "lGBM" ; do # "lGBM" "yrandom" "linear" "NNet"
 																if [ "${model}" == "NNet" ] ;  then
 																	memory=10G
 																	bsub -g /$job_group -P gpu -gpu - -M $memory -e e.log -o o.log -J drug_gdsc "python /hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/py_scripts/drug_sensitivity_gdsc_ctrp.py $network_info $lr $size_batch $n_epoch $perc_train $perc_val $dropout $gam $step $seed $epoch_reset $type_split $to_test $type_lr $data_from $model $early_stop $combination $run_type"
+																	#bsub -g /$job_group -M $memory -e e.log -o o.log -J drug_gdsc "python /hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/py_scripts/drug_sensitivity_gdsc_ctrp.py $network_info $lr $size_batch $n_epoch $perc_train $perc_val $dropout $gam $step $seed $epoch_reset $type_split $to_test $type_lr $data_from $model $early_stop $combination $run_type"
 																else
 																	bsub -g /$job_group -M $memory -e e.log -o o.log -J drug_gdsc "python /hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/py_scripts/drug_sensitivity_gdsc_ctrp.py $network_info $lr $size_batch $n_epoch $perc_train $perc_val $dropout $gam $step $seed $epoch_reset $type_split $to_test $type_lr $data_from $model $early_stop $combination $run_type"
 																fi	

@@ -114,18 +114,18 @@ class Process_dataset():
                         output = self.ohf.back_to_smile(output)
                         bottleneck = bottleneck.cpu().numpy().tolist()
                         for j in range(dataset_subset.shape[0]):
-                            bottleneck[j] = '{},{}'.format(dataset_subset.iloc[j].name, ','.join([str(x) for x in bottleneck[j]]))
+                            bottleneck[j] = '{};{}'.format(dataset_subset.iloc[j].name, ';'.join([str(x) for x in bottleneck[j]]))
                         f_b.write('\n'.join(bottleneck))
                         f_b.write('\n')
                         for j in range(dataset_subset.shape[0]):
                             m = Chem.MolFromSmiles(output[j])
                             if m is not None:
                                 valid += 1
-                                if m == dataset_subset['smile'].iloc[i]:
+                                if m == dataset_subset['smile'].iloc[j]:
                                     same += 1
                             else:
                                 invalid_id.append(i)
-                            output[j] = '{},{},{}'.format(dataset_subset.iloc[j].name, dataset_subset['smile'].iloc[j], output[j])
+                            output[j] = '{};{};{}'.format(dataset_subset.iloc[j].name, dataset_subset['smile'].iloc[j], output[j])
                         f_o.write('\n'.join(output))
                         f_o.write('\n')
         lines = ['\nNumber of valid molecules :: {}'.format(valid),
@@ -136,22 +136,25 @@ class Process_dataset():
     def load_scVAE(self, num_genes):
         if self.sc_from == 'pancancer':
             path = '/hps/research1/icortes/acunha/python_scripts/single_cell/best_model/pancancer_all_genes_no_pathway'
+            _, _, _, _, _, self.dropout_sc, _, _, _, _, _, _, _, self.layers_sc, _, _, self.pathway_sc, self.num_genes_sc = pickle.load(
+                open('{}/list_initial_parameters_single_cell.pkl'.format(path), 'rb'))
         elif self.sc_from == 'integrated':
             path = '/hps/research1/icortes/acunha/python_scripts/sc_integrated/best_model'
+            _, _, _, _, _, self.dropout_sc, _, _, _, _, _, _, _, self.layers_sc, _, _, self.pathway_sc, self.num_genes_sc, _ = pickle.load(
+                open('{}/list_initial_parameters_single_cell.pkl'.format(path), 'rb'))
 
-            _, _, _, _, _, self.dropout_sc, _, _, _, _, _, _, _, self.layers_sc, _, _, self.pathway_sc, self.num_genes_sc = pickle.load(
-                    open('{}/list_initial_parameters_single_cell.pkl'.format(path), 'rb'))
-            self.dropout_sc = float(self.dropout_sc)
-            self.layers_sc = self.layers_sc.split('_')
+        
+        self.dropout_sc = float(self.dropout_sc)
+        self.layers_sc = self.layers_sc.split('_')
 
-            number_pathways = 0
-            path_matrix_file = ''
+        number_pathways = 0
+        path_matrix_file = ''
 
-            self.sc_model = VAE_gene_expression_single_cell(dropout_prob=self.dropout_sc, n_genes=num_genes,
-                                                            layers=self.layers_sc, n_pathways=number_pathways,
-                                                            path_matrix=path_matrix_file)
-            self.sc_model.load_state_dict(torch.load('{}/single_cell_model.pt'.format(path), map_location=self.device))
-            self.sc_model.to(self.device)
+        self.sc_model = VAE_gene_expression_single_cell(dropout_prob=self.dropout_sc, n_genes=num_genes,
+                                                        layers=self.layers_sc, n_pathways=number_pathways,
+                                                        path_matrix=path_matrix_file)
+        self.sc_model.load_state_dict(torch.load('{}/single_cell_model.pt'.format(path), map_location=self.device))
+        self.sc_model.to(self.device)
 
     # --------------------------------------------------
 
@@ -174,7 +177,7 @@ class Process_dataset():
                         f_o.write('\n'.join(output))
                         f_o.write('\n')
                         for j in range(len(bottleneck)):
-                            output[j] = '{},{}, {}\n'.format(list_indexes[j], ','.join([str(x) for x in bottleneck[j]]), metadata.loc[list_indexes[j], 'Cell_line'])
+                            bottleneck[j] = '{},{},{}\n'.format(list_indexes[j], ','.join([str(x) for x in bottleneck[j]]), metadata.loc[list_indexes[j], 'Cell_line'])
                         f_b.write('\n'.join(bottleneck))
                         f_b.write('\n')
 
@@ -189,22 +192,26 @@ class Process_dataset():
             path = '/hps/research1/icortes/acunha/data/Integrated_dataset_M'
             full_metadata = pd.read_csv('{}/Metadata_Merged.tsv'.format(path), sep='\t', index_col=0)
             full_metadata = full_metadata.loc[full_metadata.batch.isin(['McF', 'pancancer'])]
-            full_metadata = full_metadata.loc[:, ['batch', 'Cell_line', 'doublet_CL2']]
-            metadata = full_metadata['Cell_line'].combine_first(full_metadata['doublet_CL2'])
-            metadata.columns = ['Cell_line']
-            metadata.batch = list(full_metadata.batch)
-            del full_metadata
-
+            full_metadata = full_metadata.loc[:, ['batch', 'Cell_line', 'doublet_CL2', 'Cancer_type']]
             cell_info = pd.read_csv('/hps/research1/icortes/acunha/data/CCLE/sample_info.csv', index_col=0, header=0)
-            cancer_type = []
-            for i in range(metadata.shape[0]):
-                cancer = list(cell_info.loc[cell_info.CCLE_Name == 'A549_LUNG', 'disease'].str.replace(' ', '_').str.replace('/','__'))
-                if len(cancer) == 1:
-                    cancer_type.extend(cancer)
+            metadata = {}
+            for i in range(full_metadata.shape[0]):
+                barcode = full_metadata.iloc[i].name
+                paper = full_metadata.batch.iloc[i]
+                if paper == 'McF':
+                    ccle = full_metadata['doublet_CL2'].iloc[i]
                 else:
-                    cancer_type.append(float('NaN'))
-            metadata['Cancer_type'] = cancer_type
-
+                    ccle = full_metadata['Cell_line'].iloc[i]
+                cancer = full_metadata['Cancer_type'].iloc[i]
+                if pd.isnull(cancer):
+                    cancer = list(cell_info.loc[cell_info.CCLE_Name == ccle, 'disease'].str.replace(' ', '_').str.replace('/','__'))
+                    if len(cancer) != 1:
+                        cancer = float('NaN')
+                    else:
+                        cancer = cancer[0]    
+                metadata[barcode] = {'Cell_line':ccle, 'Cancer_type':cancer, 'Batch':paper}
+            
+            metadata = pd.DataFrame.from_dict(metadata, orient = 'index')
 
         lines = ['\n Metadata (after loading)\n{}'.format(metadata.shape)]
         create_report(self.path_results, lines)
@@ -216,31 +223,38 @@ class Process_dataset():
 
     def load_drug_data(self):
         path = '/hps/research1/icortes/acunha/data'
-        dataset = pd.read_csv('{}/GDSC_CTRP/Final_dataset.csv'.format(path), index_col=0, nrows = 20)
+        dataset = pd.read_csv('{}/GDSC_CTRP/Final_dataset.csv'.format(path), index_col=0)
 
         new_matrix = {}
         to_keep = []
         for i in range(dataset.shape[0]):
             try:
                 mol = standardise.run(dataset.Smile.iloc[i])
+                valid_smiles = check_valid_smiles([mol], self.maximum_length_m)  # (3)
+                if len(valid_smiles) == 1:
+                    row_index = dataset.iloc[i].name
+                    to_keep.append(row_index)
+                    new_matrix[dataset.Name_compound.iloc[i]] = mol
             except standardise.StandardiseException:
                 pass
-            try:
-                valid_smiles = check_valid_smiles([mol], self.maximum_length_m)  # (3)
-            except:
-                valid_smiles = []
-            if len(valid_smiles) == 1:
-                row_index = dataset.iloc[i].name
-                to_keep.append(row_index)
-                new_matrix[dataset.Name_compound.iloc[i]] = mol
+            
 
         dataset = dataset.loc[dataset.index.isin(to_keep)]
+        indexes = list(dataset.index)
+        names = list(dataset.Name_compound)
+        indexes = [x.replace(' ', '__') for x in indexes]
+        names =  [x.replace(' ', '__') for x in names]
+        dataset.index = indexes
+        dataset.Name_compound = names
         new_matrix = pd.DataFrame.from_dict(new_matrix, orient= 'index')
         new_matrix.columns = ['smile']
+        indexes = list(new_matrix.index)
+        indexes = [x.replace(' ', '__') for x in indexes]
+        new_matrix.index = indexes
 
-        lines = ['\n PRISM dataset (after filtering the valid smiles) \n{}'.format(new_matrix.shape)]
+        lines = ['\n Drug dataset (after filtering the valid smiles) \n{}'.format(new_matrix.shape)]
         create_report(self.path_results, lines)
-        print(lines)
+        print(''.join(lines))
 
         return dataset, new_matrix, list(dataset.Cell_line.unique())
 
@@ -349,44 +363,43 @@ class Process_dataset():
         self.define_sc_path(combination)
 
         if sc_from == 'pancancer':
-            path = '/Users/acunha/Desktop/pancancer'
-            # path = '/hps/research1/icortes/acunha/python_scripts/single_cell/data/pancancer'
+            path = '/hps/research1/icortes/acunha/python_scripts/single_cell/data/pancancer'
             sc_dataset = pd.read_csv('{}/pancancer_data_{}_{}.csv'.format(path, combinations[0][0], combinations[1][0]),
                                      header=0, index_col=0)
         else:
-            # sc_dataset = pd.read_csv('/hps/research1/icortes/mkalyva/SCintegration/results/Reconstructed_matrix_fastmnn.tsv', sep='\t', index_col=0, nrows=2)
-            sc_dataset = pd.read_csv('/Users/acunha/Desktop/bottlenecks/test_set.csv', index_col=0)
+            sc_dataset = pd.read_csv('/hps/research1/icortes/mkalyva/SCintegration/results/Reconstructed_matrix_fastmnn.tsv', sep='\t', index_col=0)
         sc_dataset = sc_dataset.loc[sc_dataset.index.isin(list(sc_metadata.index))]
         sc_metadata = sc_metadata.loc[sc_metadata.index.isin(list(sc_dataset.index))]
 
         # get commun cell lines in both datasets and filter datasets
         list_commun_cell_lines = self.filter_cell_lines(list_cells_sc, list_cell_drugs)
-        drug_data = drug_data.loc[drug_data['Cell_line'].isin(list_commun_cell_lines)]
+        '''drug_data = drug_data.loc[drug_data['Cell_line'].isin(list_commun_cell_lines)]
         smiles_dataframe = smiles_dataframe.loc[smiles_dataframe.index.isin(list(drug_data['Name_compound'].unique()))]
         lines = ['\nDrug dataset (after filtering the common cell lines) \n{}'.format(drug_data.shape),
                  '\nNumber of bottlenecks (drug) \n{}'.format(smiles_dataframe.shape[0])]
-        create_report(self.path_results, lines)
-        print('\n'.join(lines))
+        # create_report(self.path_results, lines)
+        print('\n'.join(lines))'''
 
         sc_metadata = sc_metadata.loc[sc_metadata['Cell_line'].isin(list_commun_cell_lines)]
         list_single_cells = sorted(list(sc_metadata.index))
-        sc_dataset = sc_dataset.loc[sc_dataset.index.isin(list_single_cells)]
+        '''sc_dataset = sc_dataset.loc[sc_dataset.index.isin(list_single_cells)]
         lines = ['\nSc Dataset: number of barcodes (after filtering the common cell lines) \n{}'.format(
             len(list_single_cells)),
                  '\nSc metadata (after filtering the common cell lines) \n{}'.format(sc_metadata.shape)]
         create_report(self.path_results, lines)
-        print('\n'.join(lines))
+        print('\n'.join(lines))'''
 
-        drug_data.to_csv('{}/gdsc_ctrp_dataset.csv'.format(self.path_results), header=True, index=True)
+        '''drug_data.to_csv('{}/gdsc_ctrp_dataset.csv'.format(self.path_results), header=True, index=True)
         smiles_dataframe.to_csv('{}/gdsc_ctrp_smiles.csv'.format(self.path_results), header=True, index=True)
-
+        
+        
         # create the bottlenecks
         self.get_smiles_bottlenecks(smiles_dataframe)
         list_indexes_drug = list(smiles_dataframe.index)
         with open('{}/gdsc_ctrp_{}_screens.txt'.format(self.path_results, self.sc_from), 'w') as f:
-            f.write('\n'.join(list_indexes_drug))
+            f.write('\n'.join(list_indexes_drug))'''
 
-        print('Drug bottlenecks created')
+        '''print('Drug bottlenecks created')
 
         del self.molecular_model
         gc.collect()
@@ -397,6 +410,7 @@ class Process_dataset():
         with open('{}/gdsc_ctrp_{}_cell_lines.txt'.format(self.path_results, self.sc_from), 'w') as f:
             f.write('\n'.join(list_commun_cell_lines))
         list_tumours = list(sc_metadata['Cancer_type'].unique())
+        list_tumours = [x for x in list_tumours if not pd.isnull(x)]
         with open('{}/gdsc_ctrp_{}_tumours.txt'.format(self.path_results, self.sc_from), 'w') as f:
             f.write('\n'.join(list_tumours))
         with open('{}/gdsc_ctrp_{}_barcodes_sc.txt'.format(self.path_results, self.sc_from), 'w') as f:
@@ -409,14 +423,14 @@ class Process_dataset():
 
         pickle.dump(self.barcodes_per_cell_line,
                     open('{}/barcodes_per_cell_line_dict.pkl'.format(self.path_results), 'wb'))
-        pickle.dump(ccle_per_barcode, open('{}/ccle_per_barcode_dict.pkl'.format(self.path_results), 'wb'))
+        pickle.dump(ccle_per_barcode, open('{}/ccle_per_barcode_dict.pkl'.format(self.path_results), 'wb'))'''
 
         pickle.dump(sc_metadata, open('{}/{}_metadata.pkl'.format(self.path_results, self.sc_from), 'wb'))
 
         # create the integrate files
-        self.create_integrated_datasets_prism_pancancer(list_indexes_drug, drug_data, list_single_cells,sc_metadata)
+        # self.create_integrated_datasets(list_indexes_drug, drug_data, list_single_cells,sc_metadata)
 
-        sc_dataset = sc_dataset.loc[sc_dataset.index.isin(list_single_cells)]
+        '''sc_dataset = sc_dataset.loc[sc_dataset.index.isin(list_single_cells)]
         sc_dataset.sort_index(axis=0, inplace=True)
 
         # initialize the molecular model
@@ -428,7 +442,7 @@ class Process_dataset():
         print('Sc bottlenecks created - {} :: {}'.format(combinations[0][0], combinations[1][0]))
 
         del self.sc_model
-        gc.collect()
+        gc.collect()'''
 
         print('DONE!')
 
