@@ -85,6 +85,7 @@ class Drug_sensitivity_single_cell:
         self.to_test = None
         self.early_stop = None
         self.combination = None
+        self.type_smiles_VAE = None
         
         self.type_lr = None
 
@@ -123,6 +124,10 @@ class Drug_sensitivity_single_cell:
             self.early_stop = int(list_parameters[16].split('-')[1])
         self.combination = list_parameters[17]
         self.run_type = list_parameters[18]
+        if list_parameters[19] == 'new':
+            self.type_smiles_VAE = ''
+        else:
+            self.type_smiles_VAE = '_{}'.format(list_parameters[19])
 
         if self.model_architecture == 'NNet':
             self.layers_info = list_parameters[0].split('_')
@@ -765,8 +770,12 @@ class Drug_sensitivity_single_cell:
    # --------------------------------------------------
 
     def create_filename(self, list_parameters):
+        if list_parameters[19] == 'new':
+            type_smiles_VAE = ''
+        else:
+            type_smiles_VAE = '_{}'.format(list_parameters[19])
         filename_output = '{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(list_parameters[15], list_parameters[0], list_parameters[1], list_parameters[2], list_parameters[3], list_parameters[4], list_parameters[5], list_parameters[6], list_parameters[7], list_parameters[8], list_parameters[9], list_parameters[10], list_parameters[11], list_parameters[12], list_parameters[13], list_parameters[16])
-        self.filename_report = '{}/{}/{}/output_{}.txt'.format(list_parameters[14], list_parameters[17], list_parameters[15], filename_output)
+        self.filename_report = '{}{}/{}/{}/output_{}.txt'.format(list_parameters[14], type_smiles_VAE, list_parameters[17], list_parameters[15], filename_output)
         return self.filename_report
 
     # --------------------------------------------------
@@ -799,14 +808,19 @@ class Drug_sensitivity_single_cell:
                 network_info = '_'.join(layers_info[:-1])
             else:
                 network_info = '_'.join(layers_info)
-            pickle.dump([network_info, np.format_float_positional(self.learning_rate), str(self.size_batch), str(self.n_epochs), str(self.perc_train),
+            list_parameters = [network_info, np.format_float_positional(self.learning_rate), str(self.size_batch), str(self.n_epochs), str(self.perc_train),
                          str(self.perc_val), str(self.dropout), str(self.gamma), str(self.step_size), str(self.seed), str(self.epoch_reset), self.type_of_split,
-                         str(self.to_test), self.type_lr, self.data_from, self.model_architecture, self.early_stop, self.combination], open('pickle/list_initial_parameters_single_cell.pkl', 'wb'))
+                         str(self.to_test), self.type_lr, self.data_from, self.model_architecture, self.early_stop, self.combination]
 
         else:
-            pickle.dump([str(self.number_trees), np.format_float_positional(self.learning_rate), str(self.size_batch),str(self.n_epochs), str(self.perc_train),
+            list_parameters = [str(self.number_trees), np.format_float_positional(self.learning_rate), str(self.size_batch),str(self.n_epochs), str(self.perc_train),
                          str(self.perc_val), str(self.dropout), str(self.gamma), str(self.step_size), str(self.seed), str(self.epoch_reset), self.type_of_split,
-                         str(self.to_test), self.type_lr, self.data_from, self.model_architecture, self.early_stop, self.combination], open('pickle/list_initial_parameters_single_cell.pkl', 'wb'))
+                         str(self.to_test), self.type_lr, self.data_from, self.model_architecture, self.early_stop, self.combination]
+
+        if self.type_smiles_VAE != '':
+            list_parameters.append(self.type_smiles_VAE.strip('_'))
+
+        pickle.dump(list_parameters, open('pickle/list_initial_parameters_single_cell.pkl', 'wb'))
 
 # -------------------------------------------------- RUN --------------------------------------------------
 
@@ -847,7 +861,12 @@ def run_drug_prediction(list_parameters, run_type):
     #load and process the datasets
     sc_bottlenecks = pd.read_csv('{}/single_cell/{}_{}_bottlenecks.csv'.format(path_data, sc_from, combination), header = None, index_col = 0)
     sc_bottlenecks = sc_bottlenecks.iloc[:, :-1]
-    drug_bottlenecks = pd.read_csv('{}/molecular/gdsc_ctrp_bottlenecks.csv'.format(path_data), header = None, index_col = 0, sep = ';')
+    if list_parameters[-1] == 'new':
+        drug_bottlenecks = pd.read_csv('{}/molecular/gdsc_ctrp_bottlenecks.csv'.format(path_data), header = None, index_col = 0, sep = ';')
+    elif list_parameters[-1] == 'fp':
+        drug_bottlenecks = pd.read_csv('{}/molecular/gdsc_ctrp_fp.csv'.format(path_data), index_col = 0)
+    else:
+        drug_bottlenecks = pd.read_csv('{}/molecular/gdsc_ctrp_bottlenecks_old.csv'.format(path_data), header = None, index_col = 0, sep = '\t')
     n_genes = int(sc_bottlenecks.shape[1] + drug_bottlenecks.shape[1])
     sc_bottlenecks.index.name = 'barcode'
     drug_bottlenecks.index.name = 'screen'
