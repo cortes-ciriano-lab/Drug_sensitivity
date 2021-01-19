@@ -944,7 +944,7 @@ def run_drug_prediction(list_parameters, run_type):
 
 try:
     input_values = sys.argv[1:]
-    run_type = input_values[-1]
+    run_type = input_values[-2]
     run_drug_prediction(input_values, run_type)
 
 except EOFError:

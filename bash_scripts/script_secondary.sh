@@ -67,8 +67,8 @@ for model in "NNet" ; do # "NNet" "RF" "lGBM" "yrandom" "linear"
 								for seed in "42" ; do
 									for network_info in $model_info ; do
 										for early_stop in $early_stop_options ; do
-											for pathway in "no_pathway" "kegg_pathways" "canonical_pathways" "chemical_genetic_perturbations" ; do # "kegg_pathways" "chemical_genetic_perturbations" "no_pathway" "canonical_pathways"
-												for num_genes in "all_genes" "best_7000" ; do #"best_7000" "all_genes"
+											for pathway in "no_pathway" ; do # "kegg_pathways" "chemical_genetic_perturbations" "no_pathway" "canonical_pathways"
+												for num_genes in "all_genes" ; do #"best_7000" "all_genes"
 													combination="${num_genes}_${pathway}"
 													for type_split in "random" "random7" "leave-one-cell-line-out" "leave-one-tumour-out" "leave-one-drug-out" ; do # "random" "random7" "leave-one-cell-line-out" "leave-one-tumour-out" "leave-one-drug-out"
 														if [ "${sc_from}" == "pancancer" ] && [ "${type_split}" == "leave-one-cell-line-out" ] ; then

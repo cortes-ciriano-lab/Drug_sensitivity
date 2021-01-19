@@ -71,8 +71,7 @@ class Process_dataset():
     def load_smilesVAE(self):
         # path = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/trained_models/molecular/'
         path = '/hps/research1/icortes/acunha/python_scripts/Molecular_vae/best_model_old'
-        _, _, self.maximum_length_m, _, _, _, _, _, self.dropout_m, _, _, _, _, _, _ = pickle.load(
-            open('{}/list_initial_parameters_smiles.pkl'.format(path), 'rb'))
+        _, self.maximum_length_m, _, _, _, _, _, self.dropout_m, _, _, _, _, _ = pickle.load(open('{}/list_initial_parameters_smiles.pkl'.format(path), 'rb'))
         self.dropout_m = float(self.dropout_m)
         self.maximum_length_m = int(self.maximum_length_m)
         self.ohf = OneHotFeaturizer()
@@ -137,7 +136,10 @@ class Process_dataset():
 
         new_data = {}
         smiles_dataframe = pd.read_csv('{}/gdsc_ctrp_smiles.csv'.format(self.path_results), index_col=0)
-
+        
+        # initialize the molecular model
+        self.load_smilesVAE()
+        
         # create the bottlenecks
         self.get_smiles_bottlenecks(smiles_dataframe)
 
