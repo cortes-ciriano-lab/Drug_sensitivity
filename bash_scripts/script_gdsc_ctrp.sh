@@ -3,15 +3,15 @@
 
 #NNet
 run_type="start"
-for model in "lGBM" ; do # "NNet" ; do # "lGBM" "yrandom" "linear" "NNet"
-	for sc_from in "pancancer" ; do #"integrated" ; do #"pancancer" "integrated"
+for model in "lGBM" "yrandom" "linear" ; do # "lGBM" "yrandom" "linear" "NNet"
+	for sc_from in "pancancer" "integrated" ; do #"pancancer" "integrated"
 		drug_from="gdsc_ctrp"
 		data_from="${drug_from}_${sc_from}"
 		job_group="drug_${data_from}_${model}"
 		if [ "${model}" == "NNet" ] ;  then
-			bgmod -L 30 /$job_group
+			bgmod -L 15 /$job_group
 		else
-			bgmod -L 25 /$job_group
+			bgadd -L 50 /$job_group
 		fi
 		if [ "${model}" == "NNet" ] ;  then
 			perc_train="0.7"
@@ -57,7 +57,7 @@ for model in "lGBM" ; do # "NNet" ; do # "lGBM" "yrandom" "linear" "NNet"
 											for pathway in "no_pathway" ; do
 												for num_genes in "all_genes" ; do
 													combination="${num_genes}_${pathway}"
-													for type_smile_VAE in "old" ; do #"fp" ; do #"old" "fp" "new"
+													for type_smile_VAE in "old" "fp" "new" ; do #"old" "fp" "new"
 														if [ "${type_smile_VAE}" == "new" ] ; then
 															name_type_smile_VAE=""
 														else

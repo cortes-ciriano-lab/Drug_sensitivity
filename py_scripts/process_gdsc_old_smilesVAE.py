@@ -95,7 +95,7 @@ class Process_dataset():
         invalid_id = []
         with torch.no_grad():
             with open('{}/molecular/gdsc_ctrp_outputs_total_old.csv'.format(self.path_results), 'w') as f_o:
-                f_o.write('Index,Input,Output')
+                f_o.write('Index\tInput\tOutput\n')
                 with open('{}/molecular/gdsc_ctrp_bottlenecks_old.csv'.format(self.path_results), 'w') as f_b:
                     for i in range(0, dataset.shape[0], 128):
                         batch = mols[i:i + 128]
