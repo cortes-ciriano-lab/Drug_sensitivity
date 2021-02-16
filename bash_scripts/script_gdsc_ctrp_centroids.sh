@@ -4,7 +4,14 @@
 #NNet
 run_type="start"
 for model in "lGBM" ; do # "lGBM" "yrandom" "linear" "NNet"
-	for sc_from in "ccle" ; do
+	for sc_from in "integrated-centroids-bottlenecks" ; do #"pancancer-centroids-bottlenecks" ; do
+		if [ "${sc_from}" == "pancancer-centroids-bottlenecks" ] ; then
+			whole_path="/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/pancancer_related/pancancer/gdsc_ctrp_pancancer"
+			list_type_split="random7 leave-one-tumour-out leave-one-cell-line-out leave-one-drug-out" 
+		else
+			whole_path="/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/integrated/gdsc_ctrp_integrated"
+			list_type_split="random7 leave-one-tumour-out leave-one-cell-line-out leave-one-drug-out leave-mcFarland-out" 
+		fi
 		drug_from="gdsc_ctrp"
 		data_from="${drug_from}_${sc_from}"
 		job_group="drug_${data_from}_${model}"
@@ -56,16 +63,19 @@ for model in "lGBM" ; do # "lGBM" "yrandom" "linear" "NNet"
 												else
 													name_type_smile_VAE="_${type_smile_VAE}"
 												fi
-												for type_split in "random7" "leave-one-tumour-out" "leave-one-drug-out" "leave-one-cell-line-out" ; do
+												for type_split in $list_type_split;  do
 													if [ "${type_split}" == "random7" ] ; then
-														echo "1 2 3 4 5 6 7" > "/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/pancancer_related/random_list.txt"
-														file_lines="/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/pancancer_related/random_list.txt"
+														echo "1 2 3 4 5 6 7" > "/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/random_list.txt"
+														file_lines="/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/random_list.txt"
 													elif [ "${type_split}" == "leave-one-cell-line-out" ] ; then
-														file_lines="/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/pancancer_related/ccle/${drug_from}_ccle_cell_lines.txt"
+														file_lines="${whole_path}_cell_lines.txt"
 													elif [ "${type_split}" == "leave-one-tumour-out" ] ; then
-														file_lines="/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/pancancer_related/pancancer/${drug_from}_pancancer_tumours.txt"
+														file_lines="${whole_path}_tumours.txt"
 													elif [ "${type_split}" == "leave-one-drug-out" ] ; then
-														file_lines="/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/pancancer_related/ccle/${drug_from}_ccle_list_drugs_only_one.txt"
+														file_lines="${whole_path}_list_drugs_only_one.txt"
+													elif [ "${type_split}" == "leave-mcFarland-out" ] ; then
+														echo "McF" > "/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/list_dataset.txt"
+														file_lines="/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/list_dataset.txt"
 													fi
 													for to_test in `cat ${file_lines}` ; do
 														FILE="/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/new_results_gdsc_ctrp/${data_from}${name_type_smile_VAE}/${model}/output_${model}_${network_info}_${lr}_${size_batch}_${n_epoch}_${perc_train}_${perc_val}_${dropout}_${gam}_${step}_${seed}_${epoch_reset}_${type_split}_${to_test}_${type_lr}_${early_stop}.txt"
@@ -79,15 +89,23 @@ for model in "lGBM" ; do # "lGBM" "yrandom" "linear" "NNet"
 															mkdir -p pickle model_values plots
 															if [ "${model}" == "NNet" ] ;  then
 																memory=10G
-																bsub -g /$job_group -P gpu -gpu - -M $memory -e e.log -o o.log -J drug_gdsc_ccle "python /hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/py_scripts/drug_sensitivity_gdsc_ctrp_ccle.py $network_info $lr $size_batch $n_epoch $perc_train $perc_val $dropout $gam $step $seed $epoch_reset $type_split $to_test $type_lr $data_from $model $early_stop $run_type $type_smile_VAE"
-																#bsub -g /$job_group -M $memory -e e.log -o o.log -J drug_gdsc_ccle "python /hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/py_scripts/drug_sensitivity_gdsc_ctrp_ccle.py $network_info $lr $size_batch $n_epoch $perc_train $perc_val $dropout $gam $step $seed $epoch_reset $type_split $to_test $type_lr $data_from $model $early_stop $run_type $type_smile_VAE"
+																bsub -g /$job_group -P gpu -gpu - -M $memory -e e.log -o o.log -J drug_gdsc_centroid "python /hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/py_scripts/drug_sensitivity_gdsc_ctrp_centroids.py $network_info $lr $size_batch $n_epoch $perc_train $perc_val $dropout $gam $step $seed $epoch_reset $type_split $to_test $type_lr $data_from $model $early_stop $run_type $type_smile_VAE"
+																#bsub -g /$job_group -P gpu -gpu - -M $memory -e e.log -o o.log -J drug_gdsc_ccle "python /hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/py_scripts/drug_sensitivity_gdsc_ctrp_ccle.py $network_info $lr $size_batch $n_epoch $perc_train $perc_val $dropout $gam $step $seed $epoch_reset $type_split $to_test $type_lr $data_from $model $early_stop $run_type $type_smile_VAE"
 															else
-																if [ "${type_smile_VAE}" == "old" ] || [ "${type_smile_VAE}" == "new" ] ; then
-																	memory=100G
+																if [ "${sc_from}" == "integrated_centroids-bottlenecks" ] && [ "${type_smile_VAE}" == "old" ] ; then
+																	memory=30G
+																elif [ "${sc_from}" == "integrated_centroids-bottlenecks" ] && [ "${type_smile_VAE}" == "new" ] ; then
+																	memory=30G
+																elif [ "${sc_from}" == "integrated_centroids-bottlenecks" ] && [ "${type_smile_VAE}" == "fp" ] ; then
+																	memory=60G
+																elif [ "${sc_from}" == "pancancer-centroids-bottlenecks" ] && [ "${type_smile_VAE}" == "old" ] ; then
+																	memory=20G
+																elif [ "${sc_from}" == "pancancer-centroids-bottlenecks" ] && [ "${type_smile_VAE}" == "new" ] ; then
+																	memory=20G
 																else
-																	memory=100G
+																	memory=40G
 																fi
-																bsub -g /$job_group -M $memory -e e.log -o o.log -J drug_gdsc_ccle "python /hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/py_scripts/drug_sensitivity_gdsc_ctrp_ccle.py $network_info $lr $size_batch $n_epoch $perc_train $perc_val $dropout $gam $step $seed $epoch_reset $type_split $to_test $type_lr $data_from $model $early_stop $run_type $type_smile_VAE"
+																bsub -g /$job_group -M $memory -e e.log -o o.log -J drug_gdsc_centroid "python /hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/py_scripts/drug_sensitivity_gdsc_ctrp_centroids.py $network_info $lr $size_batch $n_epoch $perc_train $perc_val $dropout $gam $step $seed $epoch_reset $type_split $to_test $type_lr $data_from $model $early_stop $run_type $type_smile_VAE"
 															fi
 														fi
 													done

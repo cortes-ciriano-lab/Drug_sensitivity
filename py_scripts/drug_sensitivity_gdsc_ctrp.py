@@ -36,7 +36,7 @@ random.seed(seed)
 # -------------------------------------------------- ANOTHER FUNCTIONS --------------------------------------------------
 
 def create_report(filename, list_comments):
-    with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/new_results_gdsc_ctrp/{}'.format(filename), 'a') as f:
+    with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/new_results_gdsc_ctrp3/{}'.format(filename), 'a') as f:
         f.write('\n'.join(list_comments))
 
 # --------------------------------------------------
@@ -148,7 +148,10 @@ class Drug_sensitivity_single_cell:
 
         # self.drug_from = self.data_from.split('_')[0]
         self.sc_from = self.data_from.split('_')[-1]
-        self.path_data = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/{}'.format(self.sc_from)
+        if self.sc_from == 'integrated':
+            self.path_data = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/{}'.format(self.sc_from)
+        else:
+            self.path_data = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/pancancer_related/{}'.format(self.sc_from)
         self.new_indexes2barcode_screen = pickle.load(open('{}/gdsc_ctrp_{}_new_indexes_newIndex2barcodeScreen_dict.pkl'.format(self.path_data, self.sc_from), 'rb'))
         
         global seed
@@ -215,14 +218,19 @@ class Drug_sensitivity_single_cell:
                 else:
                     other_set.extend(final_indexes[i:int(i+len(final_indexes)/7)])
                 j += 1
-
-            train_set = other_set[:-len(test_set)]
-            validation_set = other_set[-len(test_set):]
+            
+            if self.model_architecture == 'NNet':
+                train_set = other_set[:-len(test_set)]
+                validation_set = other_set[-len(test_set):]
+            else:
+                train_set = other_set
+                validation_set = []
 
         elif self.type_of_split == 'leave-one-drug-out':
+            drug_dict = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/drug_dict.pkl', 'rb'))
             drug2indexes = pickle.load(open('{}/gdsc_ctrp_{}_drug2indexes_dict.pkl'.format(self.path_data, self.sc_from), 'rb'))
             list_drugs = list(drug2indexes.keys())
-            list_drugs.remove(self.to_test)
+            list_drugs.remove(drug_dict[self.to_test])
 
             train_set = []
             for drug in list_drugs[:-int(len(list_drugs)*0.3)]:
@@ -609,12 +617,17 @@ class Drug_sensitivity_single_cell:
         X_train = []
         y_real = []
         
-        for index in train_set_index:
-            ccle, screen, sens = self.new_indexes2barcode_screen[index]
-            barcodes = random.sample(list(ccle[1].keys()), k=1)
-            X_train.append(np.concatenate((sc_bottlenecks[ccle[1][barcodes[0]]], drug_bottlenecks[screen[0]]), axis=None))
-            y_real.append([sens])
-            self.train_barcodes.append((barcodes[0], ccle[1][barcodes[0]], ccle[0], screen[1], screen[0], sens))
+        with open('pickle/Train_set_barcodes.txt', 'w') as f:
+            for index in train_set_index:
+                ccle, screen, sens = self.new_indexes2barcode_screen[index]
+                barcodes = list(ccle[1].keys())
+                if len(barcodes) > 50 and self.type_smiles_VAE == '_fp':
+                    # barcodes = random.sample(list(ccle[1].keys()), k=50)
+                    barcodes = barcodes[:50]
+                for i in range(len(barcodes)):
+                    X_train.append(np.concatenate((sc_bottlenecks[ccle[1][barcodes[i]]], drug_bottlenecks[screen[0]]), axis=None))
+                    y_real.append([sens])
+                    f.write('{}\t{}\t{}\t{}\t{}\t{}\n'.format(barcodes[i], str(ccle[1][barcodes[i]]), ccle[0], screen[1], str(screen[0]), str(sens)))
         
         if self.model_architecture == 'yrandom':
             y_real = shuffle(y_real)
@@ -635,9 +648,6 @@ class Drug_sensitivity_single_cell:
         else:
             with open('pickle/Train_output.txt', 'w') as f:
                 f.write('\n'.join(['{:f}'.format(x) for x in y_pred]))
-
-        with open('pickle/Train_set_barcodes.txt', 'w') as f:
-            f.write('\n'.join(['\t'.join(map(str,x)) for x in self.train_barcodes]))
 
         del X_train
         del y_real
@@ -716,6 +726,9 @@ class Drug_sensitivity_single_cell:
                 for index in test_set_index:
                     ccle, screen, sens = self.new_indexes2barcode_screen[index]
                     barcodes = list(ccle[1].keys())
+                    if len(barcodes) > 50 and self.type_smiles_VAE == '_fp':
+                        # barcodes = random.sample(list(ccle[1].keys()), k=50)
+                        barcodes = barcodes[:50]
                     X = []
                     for i in range(len(barcodes)):
                         X.append(np.concatenate((sc_bottlenecks[ccle[1][barcodes[i]]], drug_bottlenecks[screen[0]]), axis=None))
@@ -861,12 +874,16 @@ def run_drug_prediction(list_parameters, run_type):
     #load and process the datasets
     sc_bottlenecks = pd.read_csv('{}/single_cell/{}_{}_bottlenecks.csv'.format(path_data, sc_from, combination), header = None, index_col = 0)
     sc_bottlenecks = sc_bottlenecks.iloc[:, :-1]
-    if list_parameters[-1] == 'new':
-        drug_bottlenecks = pd.read_csv('{}/molecular/gdsc_ctrp_bottlenecks.csv'.format(path_data), header = None, index_col = 0, sep = ';')
-    elif list_parameters[-1] == 'fp':
-        drug_bottlenecks = pd.read_csv('{}/molecular/gdsc_ctrp_fp.csv'.format(path_data), index_col = 0)
+    if sc_from == 'integrated':
+        path_drug = path_data
     else:
-        drug_bottlenecks = pd.read_csv('{}/molecular/gdsc_ctrp_bottlenecks_old.csv'.format(path_data), header = None, index_col = 0, sep = '\t')
+        path_drug = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/pancancer_related'
+    if list_parameters[-1] == 'new':
+        drug_bottlenecks = pd.read_csv('{}/molecular/gdsc_ctrp_bottlenecks.csv'.format(path_drug), header = None, index_col = 0, sep = ';')
+    elif list_parameters[-1] == 'fp':
+        drug_bottlenecks = pd.read_csv('{}/molecular/gdsc_ctrp_fp.csv'.format(path_drug), index_col = 0)
+    else:
+        drug_bottlenecks = pd.read_csv('{}/molecular/gdsc_ctrp_bottlenecks_old.csv'.format(path_drug), header = None, index_col = 0, sep = '\t')
     n_genes = int(sc_bottlenecks.shape[1] + drug_bottlenecks.shape[1])
     sc_bottlenecks.index.name = 'barcode'
     drug_bottlenecks.index.name = 'screen'

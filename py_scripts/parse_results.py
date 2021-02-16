@@ -17,11 +17,10 @@ train_f1_total = []
 loss_params = []
 
 check = []
-type_data = sys.argv[1]
-data_from = sys.argv[2]
-type_network = sys.argv[3]
-combination = sys.argv[4]
-files = open('loss_results_{}_{}_{}_{}.txt'.format(type_data, data_from, type_network, combination),'r')
+data_from = sys.argv[1]
+type_network = sys.argv[2]
+combination = sys.argv[3]
+files = open('loss_results_{}_{}_{}.txt'.format(data_from, type_network, combination),'r')
 files = files.readlines()
 
 if type_network == "NNet":
@@ -209,8 +208,8 @@ else:
     d = d.sort_values(['Test_loss_total', 'Test_corr_total'])
     
 if len(check) >= 1:
-    with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/check_cases_{}_{}_{}_{}.txt'.format(type_data, data_from, type_network, combination), 'w') as f:
+    with open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/check_cases_{}_{}_{}.txt'.format(data_from, type_network, combination), 'w') as f:
         f.write('\n'.join(check))
 
 print(d)
-d.to_csv('summary_results_{}_{}_{}_{}.csv'.format(type_data, data_from, type_network, combination), header=True, index=False)
+d.to_csv('summary_results_{}_{}_{}.csv'.format(data_from, type_network, combination), header=True, index=False)

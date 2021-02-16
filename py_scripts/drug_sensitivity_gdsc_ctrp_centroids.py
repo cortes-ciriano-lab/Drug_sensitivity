@@ -146,8 +146,12 @@ class Drug_sensitivity_single_cell:
 
         # self.drug_from = self.data_from.split('_')[0]
         self.sc_from = self.data_from.split('_')[-1]
-        self.path_data = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/pancancer_related/{}'.format(self.sc_from)
-        self.new_indexes2barcode_screen = pickle.load(open('{}/gdsc_ctrp_{}_new_indexes_newIndex2barcodeScreen_dict.pkl'.format(self.path_data, self.sc_from), 'rb'))
+        if 'pancancer' in self.sc_from:
+            self.path_data = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/pancancer_related/pancancer_centroids'
+            self.new_indexes2barcode_screen = pickle.load(open('{}/gdsc_ctrp_pancancer_centroids_new_indexes_newIndex2barcodeScreen_dict.pkl'.format(self.path_data), 'rb'))
+        else:
+            self.path_data = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/integrated/integrated_centroids'
+            self.new_indexes2barcode_screen = pickle.load(open('{}/gdsc_ctrp_integrated_centroids_new_indexes_newIndex2barcodeScreen_dict.pkl'.format(self.path_data), 'rb'))
         
         global seed
         if seed != self.seed:
@@ -217,39 +221,49 @@ class Drug_sensitivity_single_cell:
             else:
                 train_set = other_set
                 validation_set = []
+        
+        elif self.type_of_split == 'leave-one-drug-out':
+            if 'pancancer' in self.sc_from:
+                path_data = self.path_data.replace('_centroids', '')
+            else:
+                path_data = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/integrated/'
+            drug2indexes = pickle.load(open('{}/gdsc_ctrp_{}_drug2indexes_dict.pkl'.format(path_data, self.sc_from.split('-')[0]), 'rb'))
+            list_drugs = list(drug2indexes.keys())
+            
+            drug_dict = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/drug_dict.pkl', 'rb'))
+            list_drugs.remove(drug_dict[self.to_test])
+
+            train_set = []
+            for drug in list_drugs[:-int(len(list_drugs)*0.3)]:
+                train_set.extend(drug2indexes[drug])
+            validation_set = []
+            for drug in list_drugs[-int(len(list_drugs)*0.3):]:
+                validation_set.extend(drug2indexes[drug])
+
+            test_set = drug2indexes[drug_dict[self.to_test]]
+
+            final_indexes = list(self.new_indexes2barcode_screen.keys())
+            for dataset in [train_set, validation_set, test_set]:
+                for index in dataset:
+                    final_indexes.remove(index)
+
+            validation_set.extend(final_indexes)
 
         else:
             #common cell lines between the drug and sc dataset
-            with open('{}/gdsc_ctrp_ccle_cell_lines.txt'.format(self.path_data), 'r') as f:
+            if 'pancancer' in self.sc_from:
+                path_data = self.path_data.replace('_centroids', '')
+            else:
+                path_data = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/integrated/'
+
+            with open('{}/gdsc_ctrp_{}_cell_lines.txt'.format(path_data, self.sc_from.split('-')[0]), 'r') as f:
                 list_cell_lines = f.readlines()
                 list_cell_lines = [x.strip('\n') for x in list_cell_lines]
 
             #celllines2indexes dict
-            drug_sc_new_indexes_dict = pickle.load(open('{}/gdsc_ctrp_ccle_new_indexes_dict.pkl'.format(self.path_data), 'rb'))
-            
-            if self.type_of_split == 'leave-one-drug-out':
-                drug2indexes = pickle.load(open('{}/gdsc_ctrp_ccle_drug2indexes_dict.pkl'.format(self.path_data), 'rb'))
-                list_drugs = list(drug2indexes.keys())
-                
-                drug_dict = pickle.load(open('/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/drug_dict.pkl', 'rb'))
-                list_drugs.remove(drug_dict[self.to_test])
-    
-                train_set = []
-                for drug in list_drugs[:-int(len(list_drugs)*0.3)]:
-                    train_set.extend(drug2indexes[drug])
-                validation_set = []
-                for drug in list_drugs[-int(len(list_drugs)*0.3):]:
-                    validation_set.extend(drug2indexes[drug])
-    
-                test_set = drug2indexes[drug_dict[self.to_test]]
+            drug_sc_new_indexes_dict = pickle.load(open('{}/gdsc_ctrp_{}_new_indexes_dict.pkl'.format(path_data, self.sc_from.split('-')[0]), 'rb'))
 
-                final_indexes = list(self.new_indexes2barcode_screen.keys())
-                for dataset in [train_set, validation_set, test_set]:
-                    final_indexes = list(set(final_indexes).difference(dataset))
-    
-                validation_set.extend(final_indexes)
-            
-            elif self.type_of_split == 'leave-one-cell-line-out':
+            if self.type_of_split == 'leave-one-cell-line-out':
                 list_cell_lines.remove(self.to_test)
 
                 train_set = []
@@ -268,13 +282,12 @@ class Drug_sensitivity_single_cell:
                 test_set = drug_sc_new_indexes_dict[self.to_test]
 
             elif self.type_of_split == 'leave-one-tumour-out':
-                path_data = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/pancancer_related/pancancer'
-                with open('{}/gdsc_ctrp_pancancer_tumours.txt'.format(path_data), 'r') as f:
+                with open('{}/gdsc_ctrp_{}_tumours.txt'.format(path_data, self.sc_from.split('-')[0]), 'r') as f:
                     list_tumours = f.readlines()
                     list_tumours = [x.strip('\n') for x in list_tumours]
                     list_tumours.remove(self.to_test)
-                
-                metadata = pickle.load(open('{}/pancancer_metadata.pkl'.format(path_data), 'rb'))
+
+                metadata = pickle.load(open('{}/{}_metadata.pkl'.format(path_data, self.sc_from.split('-')[0]), 'rb'))
                 metadata = metadata.loc[metadata['Cell_line'].isin(list_cell_lines)]
                 train_set = []
                 validation_set = []
@@ -298,6 +311,31 @@ class Drug_sensitivity_single_cell:
                 test_set = []
                 for i in range(len(test_cells)):
                     test_set.extend(drug_sc_new_indexes_dict[test_cells[i]])
+                
+                del metadata
+            
+            elif self.type_of_split == 'leave-mcFarland-out':
+                metadata = pickle.load(open('{}/{}_metadata.pkl'.format(path_data, self.sc_from.split('-')[0]), 'rb'))
+                metadata = metadata.loc[metadata['Cell_line'].isin(list_cell_lines)]
+                test_cells = list(metadata.Cell_line.loc[metadata.Batch == self.to_test].unique())
+                test_set = []
+                for i in range(len(test_cells)):
+                    test_set.extend(drug_sc_new_indexes_dict[test_cells[i]])
+                
+                other_cells = list(metadata.Cell_line.loc[metadata.Batch != self.to_test].unique())
+                train_set = []
+                validation_set = []
+                if self.model_architecture == 'NNet':
+                    train_cells = other_cells[:-int(len(other_cells)*0.3)]
+                    validation_cells = other_cells[-int(len(other_cells)*0.3):]
+
+                    for i in range(len(train_cells)):
+                        train_set.extend(drug_sc_new_indexes_dict[train_cells[i]])
+                    for i in range(len(validation_cells)):
+                        validation_set.extend(drug_sc_new_indexes_dict[validation_cells[i]])
+                else:
+                    for i in range(len(other_cells)):
+                        train_set.extend(drug_sc_new_indexes_dict[other_cells[i]])
 
                 del metadata
             del drug_sc_new_indexes_dict
@@ -321,19 +359,19 @@ class Drug_sensitivity_single_cell:
 
     # --------------------------------------------------
 
-    def get_batches(self, ccle_data, drug_bottlenecks, indexes, type_dataset):
+    def get_batches(self, sc_data, drug_bottlenecks, indexes, type_dataset):
         data = []
         sensitivity = []
         for index in indexes:
             ccle, screen, sens = self.new_indexes2barcode_screen[index]
-            data.append(np.concatenate((ccle_data[ccle[0]], drug_bottlenecks[screen[0]]), axis=None))
+            data.append(np.concatenate((sc_data[ccle[1]], drug_bottlenecks[screen[0]]), axis=None))
             sensitivity.append([sens])
             if type_dataset == 'Train':
-                self.train_barcodes.append((ccle[1], ccle[0], screen[1], screen[0], sens))
+                self.train_barcodes.append((ccle[0], ccle[1], screen[1], screen[0], sens))
             elif type_dataset == 'Validation':
-                self.validation_barcodes.append((ccle[1], ccle[0], screen[1], screen[0], sens))
+                self.validation_barcodes.append((ccle[0], ccle[1], screen[1], screen[0], sens))
             else:
-                self.test_barcodes.append((ccle[1], ccle[0], screen[1], screen[0], sens))
+                self.test_barcodes.append((ccle[0], ccle[1], screen[1], screen[0], sens))
             
         return torch.Tensor(data).type('torch.FloatTensor'), torch.Tensor(np.array(sensitivity)).type('torch.FloatTensor')
 
@@ -404,7 +442,7 @@ class Drug_sensitivity_single_cell:
 
     # --------------------------------------------------
 
-    def __train_validation_nnet(self, model, ccle_data, drug_bottlenecks, train_set_index, validation_set_index):
+    def __train_validation_nnet(self, model, sc_data, drug_bottlenecks, train_set_index, validation_set_index):
         if self.run_type == 'start':
             n_epochs_not_getting_better = 0
             best_epoch = None
@@ -449,14 +487,14 @@ class Drug_sensitivity_single_cell:
 
             # TRAINING
             start_train_time = time.time()
-            model, optimizer, train_loss_epoch = self.__train_nnet__(model, optimizer, ccle_data, drug_bottlenecks, train_set_index, 'Train')
+            model, optimizer, train_loss_epoch = self.__train_nnet__(model, optimizer, sc_data, drug_bottlenecks, train_set_index, 'Train')
             end_train_model = time.time()
             results['loss_values_training'][epoch] = train_loss_epoch
             results['times_training'][epoch] = end_train_model - start_train_time
             
             # VALIDATION
             start_validation_time = time.time()
-            validation_loss_epoch = self.__validation_and_test_nnet__(model, ccle_data, drug_bottlenecks, validation_set_index, 'Validation')
+            validation_loss_epoch = self.__validation_and_test_nnet__(model, sc_data, drug_bottlenecks, validation_set_index, 'Validation')
             end_validation_time = time.time()
             results['loss_values_validation'][epoch] = validation_loss_epoch
             results['times_validation'][epoch] = end_validation_time - start_validation_time
@@ -512,12 +550,12 @@ class Drug_sensitivity_single_cell:
 
     # --------------------------------------------------
 
-    def __train_nnet__(self, model, optimizer, ccle_data, drug_bottlenecks, train_set_index, type_dataset):
+    def __train_nnet__(self, model, optimizer, sc_data, drug_bottlenecks, train_set_index, type_dataset):
         train_loss_epoch = 0.0
         model.train()  # set model for training
         n_batches = 0
         for i in range(0, len(train_set_index), self.size_batch):
-            inputs, real_values = self.get_batches(ccle_data, drug_bottlenecks, train_set_index[i:int(i + self.size_batch)], type_dataset)
+            inputs, real_values = self.get_batches(sc_data, drug_bottlenecks, train_set_index[i:int(i + self.size_batch)], type_dataset)
             inputs = inputs.to(self.device)
             real_values = real_values.to(self.device)
             optimizer.zero_grad()  # set the gradients of all parameters to zero
@@ -535,13 +573,13 @@ class Drug_sensitivity_single_cell:
 
     # --------------------------------------------------
 
-    def __validation_and_test_nnet__(self, model, ccle_data, drug_bottlenecks, dataset_index, type_dataset):
+    def __validation_and_test_nnet__(self, model, sc_data, drug_bottlenecks, dataset_index, type_dataset):
         loss_epoch = 0.0
         model.eval()
         n_batches = 0
         with torch.no_grad():
             for i in range(0, len(dataset_index), self.size_batch):
-                inputs, real_values = self.get_batches(ccle_data, drug_bottlenecks, dataset_index[i:int(i + self.size_batch)], type_dataset)
+                inputs, real_values = self.get_batches(sc_data, drug_bottlenecks, dataset_index[i:int(i + self.size_batch)], type_dataset)
                 inputs = inputs.to(self.device)
                 real_values = real_values.to(self.device)
                 predictions = model(inputs)  # output predicted by the model
@@ -559,7 +597,7 @@ class Drug_sensitivity_single_cell:
         
     # --------------------------------------------------
     
-    def __get_predictions_nnet__(self, model, ccle_data, drug_bottlenecks, type_dataset):
+    def __get_predictions_nnet__(self, model, sc_data, drug_bottlenecks, type_dataset):
         if type_dataset == 'Train':
             indexes = self.best_train_barcodes
             with open('pickle/Train_set_barcodes.txt', 'w') as f:
@@ -574,7 +612,7 @@ class Drug_sensitivity_single_cell:
             with open('pickle/{}_output.txt'.format(type_dataset), 'w') as f:
                 for i in range(len(indexes)):
                     _, ccle_id, _, screen_id, sens = indexes[i]
-                    inputs = torch.Tensor(np.concatenate((ccle_data[int(ccle_id)], drug_bottlenecks[int(screen_id)]), axis=None)).type('torch.FloatTensor').to(self.device)
+                    inputs = torch.Tensor(np.concatenate((sc_data[int(ccle_id)], drug_bottlenecks[int(screen_id)]), axis=None)).type('torch.FloatTensor').to(self.device)
                     predictions = model(inputs)
                     if i != 0:
                         f.write('\n')
@@ -582,15 +620,15 @@ class Drug_sensitivity_single_cell:
 
     # --------------------------------------------------
 
-    def __train_lgbm_or_linear(self, model, ccle_data, drug_bottlenecks, train_set_index):
+    def __train_lgbm_or_linear(self, model, sc_data, drug_bottlenecks, train_set_index):
         X_train = []
         y_real = []
         
         for index in train_set_index:
             ccle, screen, sens = self.new_indexes2barcode_screen[index]
-            X_train.append(np.concatenate((ccle_data[ccle[0]], drug_bottlenecks[screen[0]]), axis=None))
+            X_train.append(np.concatenate((sc_data[ccle[1]], drug_bottlenecks[screen[0]]), axis=None))
             y_real.append([sens])
-            self.train_barcodes.append((ccle[1], ccle[0], screen[1], screen[0], sens))
+            self.train_barcodes.append((ccle[0], ccle[1], screen[1], screen[0], sens))
         
         if self.model_architecture == 'yrandom':
             y_real = shuffle(y_real)
@@ -624,22 +662,22 @@ class Drug_sensitivity_single_cell:
 
     # --------------------------------------------------
 
-    def train_model(self, model, ccle_data, drug_bottlenecks, train_set_index, validation_set_index = []):
+    def train_model(self, model, sc_data, drug_bottlenecks, train_set_index, validation_set_index = []):
         start_training = time.time()
 
         if self.model_architecture == 'NNet':
-            model = self.__train_validation_nnet(model, ccle_data, drug_bottlenecks, train_set_index, validation_set_index)
+            model = self.__train_validation_nnet(model, sc_data, drug_bottlenecks, train_set_index, validation_set_index)
 
         elif self.model_architecture == 'lGBM' or self.model_architecture == 'yrandom' or self.model_architecture == 'linear':
-            model = self.__train_lgbm_or_linear(model, ccle_data, drug_bottlenecks, train_set_index)
+            model = self.__train_lgbm_or_linear(model, sc_data, drug_bottlenecks, train_set_index)
         
 
         end_training = time.time()
         create_report(self.filename_report, ['Duration: {:.2f} \n'.format(end_training - start_training)])
         
         if self.model_architecture == 'NNet':
-            self.__get_predictions_nnet__(model, ccle_data, drug_bottlenecks, 'Train')
-            self.__get_predictions_nnet__(model, ccle_data, drug_bottlenecks, 'Validation')
+            self.__get_predictions_nnet__(model, sc_data, drug_bottlenecks, 'Train')
+            self.__get_predictions_nnet__(model, sc_data, drug_bottlenecks, 'Validation')
         self.__save_model(model)
 
         return model
@@ -673,8 +711,8 @@ class Drug_sensitivity_single_cell:
 
     # --------------------------------------------------
 
-    def __run_test_set_nnet(self, model, ccle_data, drug_bottlenecks, test_set_index):
-        test_loss = self.__validation_and_test_nnet__(model, ccle_data, drug_bottlenecks, test_set_index, 'Test')
+    def __run_test_set_nnet(self, model, sc_data, drug_bottlenecks, test_set_index):
+        test_loss = self.__validation_and_test_nnet__(model, sc_data, drug_bottlenecks, test_set_index, 'Test')
         with open('pickle/Test_set_barcodes.txt', 'w') as f:
             f.write('\n'.join(['\t'.join(map(str,x)) for x in self.test_barcodes]))
 
@@ -683,15 +721,15 @@ class Drug_sensitivity_single_cell:
 
     # --------------------------------------------------
 
-    def __run_test_set_lgbm_or_linear(self, model, ccle_data, drug_bottlenecks, test_set_index):
+    def __run_test_set_lgbm_or_linear(self, model, sc_data, drug_bottlenecks, test_set_index):
         y_real = []
         X = []
         with open('pickle/Test_set_barcodes.txt', 'w') as file:
             for index in test_set_index:
                 ccle, screen, sens = self.new_indexes2barcode_screen[index]
-                X.append(np.concatenate((ccle_data[ccle[0]], drug_bottlenecks[screen[0]]), axis=None))
+                X.append(np.concatenate((sc_data[ccle[1]], drug_bottlenecks[screen[0]]), axis=None))
                 y_real.append([sens])
-                file.write('{}\t{}\t{}\t{}\t{}\n'.format(ccle[1], ccle[0], screen[1], str(screen[0]), str(sens)))
+                file.write('{}\t{}\t{}\t{}\t{}\n'.format(ccle[0], ccle[1], screen[1], str(screen[0]), str(sens)))
 
         y_pred = model.predict(np.array(X))
         y_pred = y_pred.tolist()
@@ -711,11 +749,11 @@ class Drug_sensitivity_single_cell:
 
     # --------------------------------------------------
 
-    def run_test_set(self, model, ccle_data, drug_bottlenecks, test_set_index):
+    def run_test_set(self, model, sc_data, drug_bottlenecks, test_set_index):
         if self.model_architecture == 'NNet':
-            self.__run_test_set_nnet(model, ccle_data, drug_bottlenecks, test_set_index)
+            self.__run_test_set_nnet(model, sc_data, drug_bottlenecks, test_set_index)
         elif self.model_architecture == 'lGBM' or self.model_architecture == 'yrandom' or self.model_architecture == 'linear':
-            self.__run_test_set_lgbm_or_linear(model, ccle_data, drug_bottlenecks, test_set_index)
+            self.__run_test_set_lgbm_or_linear(model, sc_data, drug_bottlenecks, test_set_index)
 
     # --------------------------------------------------
 
@@ -824,16 +862,20 @@ def run_drug_prediction(list_parameters, run_type):
             test_set_index = [x.strip('\n') for x in test_set_index]
     
     #load and process the datasets
-    ccle_data = pd.read_csv('{}/ccle_dataset.csv'.format(path_data), index_col = 0)
-    path_drug = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/pancancer_related/'
+    if sc_from == 'pancancer-centroids':
+        sc_data = pd.read_csv('{}/pancancer_centroids_dataset.csv'.format(path_data), index_col = 0)
+        path_drug = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/pancancer_related/'
+    else:
+        sc_data = pd.read_csv('{}/integrated_centroids_bottlenecks.csv'.format(path_data), index_col = 0, header = None)
+        path_drug = '/hps/research1/icortes/acunha/python_scripts/Drug_sensitivity/data_gdsc_ctrp/integrated/'
     if list_parameters[-1] == 'new':
-        drug_bottlenecks = pd.read_csv('{}/molecular/gdsc_ctrp_bottlenecks.csv'.format(patpath_drugh_data), header = None, index_col = 0, sep = ';')
+        drug_bottlenecks = pd.read_csv('{}/molecular/gdsc_ctrp_bottlenecks.csv'.format(path_drug), header = None, index_col = 0, sep = ';')
     elif list_parameters[-1] == 'fp':
         drug_bottlenecks = pd.read_csv('{}/molecular/gdsc_ctrp_fp.csv'.format(path_drug), index_col = 0)
     else:
         drug_bottlenecks = pd.read_csv('{}/molecular/gdsc_ctrp_bottlenecks_old.csv'.format(path_drug), header = None, index_col = 0, sep = '\t')
-    n_genes = int(ccle_data.shape[1] + drug_bottlenecks.shape[1])
-    ccle_data = ccle_data.to_numpy()
+    n_genes = int(sc_data.shape[1] + drug_bottlenecks.shape[1])
+    sc_data = sc_data.to_numpy()
     drug_bottlenecks = drug_bottlenecks.to_numpy()
     
     #start the Drug Sensitivity model
@@ -843,8 +885,8 @@ def run_drug_prediction(list_parameters, run_type):
         model = drug_sens.initialize_model(size_input=[])
     
     #train the model
-    model_trained = drug_sens.train_model(model, ccle_data, drug_bottlenecks, train_set_index, validation_set_index)
-    drug_sens.run_test_set(model_trained, ccle_data, drug_bottlenecks, test_set_index)
+    model_trained = drug_sens.train_model(model, sc_data, drug_bottlenecks, train_set_index, validation_set_index)
+    drug_sens.run_test_set(model_trained, sc_data, drug_bottlenecks, test_set_index)
 
     #add the predicted values to the final dataset
     drug_sens.save_dataset('Train')
